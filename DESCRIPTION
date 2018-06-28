@@ -1,0 +1,28 @@
+Package: mimosa
+Title: Model-based Integration of Metabolite Observations and Species Abundances
+Version: 1.0.0
+Authors@R: person("Cecilia", "Noecker", email = "cnoecker@uw.edu", role = c("aut", "cre"))
+Description: What the package does (one paragraph).
+Depends:
+    R (>= 3.2.2)
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+Imports:
+    data.table,
+    vegan,
+    RColorBrewer,
+    stringr,
+    qvalue,
+    reshape2,
+    permute,
+    devtools,
+    Rcpp,
+    rBLAST,
+    Biostrings
+Suggests:
+    KEGGREST,
+    readr,
+    testthat
+RoxygenNote: 6.0.1
+LinkingTo: Rcpp

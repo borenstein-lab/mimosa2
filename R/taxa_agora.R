@@ -23,7 +23,7 @@ get_rep_seqs_from_otus = function(otus, database = "Greengenes 13_5 or 13_8", re
   if(grepl("Greengenes", database)){
     dat_file = paste0(rep_seq_path, "gg_13_5.fasta.gz")
   } else {
-    dat_file = paste0(rep_seq_path, "silva_132_99_16S.fna")
+    # dat_file = paste0(rep_seq_path, "silva_132_99_16S.fna")
   }
   dat_index = data.table(fasta.index(dat_file))
   desired_otus = dat_index[desc %in% otus]
@@ -42,7 +42,36 @@ blast_seqs = function(seqs, blast_path = "./data/blastDB/"){
   return(blast_out)
 }
 
-
-load_agora_models = function(agora_path = "data/AGORA/"){
-
+getModelInfo = function(matFile){
+  return(readMat(matFile)[[1]][,,1])
 }
+
+load_agora_models = function(agora_path = "data/AGORAmodels/"){
+  all_mod_files = list.files(agora_path)
+  all_mods = list()
+  for(j in 1:length(all_mod_files)){
+    all_mods[[j]] = getModelInfo(paste0(agora_path, all_mod_files[j]))
+  }
+  return(all_mods)
+}
+
+process_mat_met_file = function(mat_met_file = "BiKEGG-master/AllKEGG2BiGGmet.mat"){
+  met_table = readMat(mat_met_file)[[1]][,,1]
+  kegg_ids = sapply(met_table[[1]], function(x){
+    return(x[[1]][[1]][[1]][1])
+  })
+  bigg_ids = sapply(met_table[[2]], function(x){
+    return(x[[1]][[1]][[1]][1])
+  })
+  kegg_table = data.table(KEGG = kegg_ids, BiGG = bigg_ids)
+  kegg_table[,genericBiGG:=gsub("_[a-z]$", "", BiGG)]
+  return(kegg_table)
+}
+
+get_kegg_met_ids = function(agora_ids, kegg_table){
+  agora_ids_search = gsub("\\[.*", "", agora_ids)
+  return(kegg_table[])
+}
+
+
+

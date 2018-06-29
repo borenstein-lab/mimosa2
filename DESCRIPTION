@@ -19,7 +19,8 @@ Imports:
     devtools,
     Rcpp,
     rBLAST,
-    Biostrings
+    Biostrings,
+    R.matlab
 Suggests:
     KEGGREST,
     readr,

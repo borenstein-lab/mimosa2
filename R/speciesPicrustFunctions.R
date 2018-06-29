@@ -1,28 +1,65 @@
 ### PICRUSt-single species model functions - modified from BURRITO
 
-#Function called by run_pipeline to get species-specific KOs and reactions
+#' Set column name of OTU table to "OTU"
+#'
+#' @import data.table
+#' @param species_table
+#' @return Species table with column name as OTU
+#' @examples
+#' spec_table_fix(spec_table)
+#' @export
+spec_table_fix = function(species_table){
+  otu_col = names(species_table)[names(species_table) %in% c("OTU", "#OTU ID", "Sequence", "ASV")]
+  if(length(otu_col) != 1) stop("Species data must have a valid OTU/sequence column name")
+  setnames(species_table, otu_col, "OTU")
+  return(species_table)
+}
+
+
+
+
+#' Function called by run_pipeline to get species-specific KOs and reactions
+#'
+#' @import data.table
+#' @param species_table OTU/seq table
+#' @param database ESV/GReengenes/SILVA
+#' @param picrust_paths paths to PICRUSt info files
+#' @param kegg_paths paths to KEGG network files
+#' @return Table of species-specific KEGG reactions
+#' @examples
+#' build_generic_network(species_table, "Greengenes 13_5 or 13_8", picrust_paths, kegg_paths)
+#' @export
 build_generic_network = function(species_table, database, picrust_paths, kegg_paths){
-  if(database=="Greengenes 13_5 or 13_8"){
-    contribution_table = generate_contribution_table_using_picrust(species_table, picrust_norm_file = picrust_paths[1], picrust_ko_table_directory = picrust_paths[2], picrust_ko_table_suffix = picrust_paths[3])
-    contribution_table = contribution_table[contribution != 0]
-    all_kegg = get_kegg_reaction_info(kegg_paths[2], reaction_info_file = kegg_paths[3], save_out = F)
-    network_template = generate_network_template_kegg(kegg_paths[1], all_kegg = all_kegg, write_out = F)
-    otu_list = contribution_table[,sort(unique(OTU))]
-    spec_models = rbindlist(lapply(otu_list, function(x){
-      spec_mod = network_template[KO %in% contribution_table[OTU==x, unique(KO)]]
-      spec_mod[,OTU:=x]
-      return(spec_mod)
-    }))
-  } else {
+  if(database=="Sequence variants (recommended for AGORA)"){
+    seq_list = species_table[,OTU]
+    species_table = get_otus_from_seqvar(species_table[]) #Run vsearch to get gg OTUs
+  } else if(database != "Greengenes 13_5 or 13_8"){
     stop("Only Greengenes currently implemented")
   }
+  contribution_table = generate_contribution_table_using_picrust(species_table, picrust_norm_file = picrust_paths[1], picrust_ko_table_directory = picrust_paths[2], picrust_ko_table_suffix = picrust_paths[3])
+  contribution_table = contribution_table[contribution != 0]
+  all_kegg = get_kegg_reaction_info(kegg_paths[2], reaction_info_file = kegg_paths[3], save_out = F)
+  network_template = generate_network_template_kegg(kegg_paths[1], all_kegg = all_kegg, write_out = F)
+  otu_list = contribution_table[,sort(unique(OTU))]
+  spec_models = rbindlist(lapply(otu_list, function(x){
+    spec_mod = network_template[KO %in% contribution_table[OTU==x, unique(KO)]]
+    spec_mod[,OTU:=x]
+    return(spec_mod)
+  }))
   return(spec_models)
 }
 
 
-# get_genomic_content_from_picrust_table(otu)
-#
-# Returns the column from the picrust tables that corresponds to the genomic content of the indicated OTU
+#' Returns the column from the picrust tables that corresponds to the genomic content of the indicated OTU
+#'
+#' @import data.table
+#' @param otu OTU ID
+#' @param picrust_ko_table_directory Directory of PICRUSt genome OTU predictions
+#' @param picrust_ko_table_suffix File naming of PICRUSt genome OTU predictions
+#' @return Genomic content for a single OTU
+#' @examples
+#' get_genomic_content_from_picrust_table(otu, picrust_dir, picrust_suffix)
+#' @export
 get_genomic_content_from_picrust_table = function(otu, picrust_ko_table_directory, picrust_ko_table_suffix){
 
   # Read in the file for this otu's genomic content
@@ -34,9 +71,16 @@ get_genomic_content_from_picrust_table = function(otu, picrust_ko_table_director
   return(otu_genomic_content)
 }
 
-# get_subset_picrust_ko_table(otus)
-#
-# Returns the melted picrust ko table corresponding to the given set of OTUs
+#' Returns the melted picrust ko table corresponding to the given set of OTUs
+#'
+#' @import data.table
+#' @param otus List of OTUs to find genomic content for
+#' @param picrust_ko_table_directory Directory of PICRUSt genome OTU predictions
+#' @param picrust_ko_table_suffix File naming of PICRUSt genome OTU predictions
+#' @return Genomic content for list of OTUs
+#' @examples
+#' get_subset_picrust_ko_table(otus, picrust_dir, picrust_suffix)
+#' @export
 get_subset_picrust_ko_table = function(otus, picrust_ko_table_directory, picrust_ko_table_suffix){
 
   # Get all columns corresponding to the otus and transpose
@@ -45,9 +89,17 @@ get_subset_picrust_ko_table = function(otus, picrust_ko_table_directory, picrust
   return(subset_picrust_ko_table)
 }
 
-# generate_contribution_table_using_picrust(otu_table)
-#
-# Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables
+#' Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables
+#'
+#' @import data.table
+#' @param otu_table OTU/seq table
+#' @param picrust_norm_file File path to PICRUSt 16S normalization reference data
+#' @param picrust_ko_table_directory Directory of PICRUSt genome OTU predictions
+#' @param picrust_ko_table_suffix File naming of PICRUSt genome OTU predictions
+#' @return Table of PICRUSt-based contribution abundances for all OTUs
+#' @examples
+#' generate_contribution_table_using_picrust(otu_table, picrust_norm_file, picrust_dir, picrust_suffix)
+#' @export
 generate_contribution_table_using_picrust = function(otu_table, picrust_norm_file, picrust_ko_table_directory, picrust_ko_table_suffix){
 
   #Convert table to relative abundances

@@ -107,7 +107,7 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
   otu_table = data.table(OTU = otu_table[,OTU], otu_table[,lapply(.SD, function(x){ return(x/sum(x))}), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])
 
   # Read the normalization table and standardize column names
-  picrust_normalization_table = fread(paste("zcat ", picrust_norm_file, sep=""), header=T)
+  picrust_normalization_table = fread(paste("gunzip -c ", picrust_norm_file, sep=""), header=T)
   colnames(picrust_normalization_table) = c("OTU", "norm_factor")
   picrust_normalization_table[,OTU:= as.character(OTU)]
 

@@ -29,10 +29,11 @@ spec_table_fix = function(species_table){
 #' @examples
 #' build_generic_network(species_table, "Greengenes 13_5 or 13_8", picrust_paths, kegg_paths)
 #' @export
-build_generic_network = function(species_table, database, picrust_paths, kegg_paths){
+build_generic_network = function(species_table, database, picrust_paths, kegg_paths, repSeqPath = NA){
   if(database=="Sequence variants (recommended for AGORA)"){
     seq_list = species_table[,OTU]
-    species_table = get_otus_from_seqvar(species_table[]) #Run vsearch to get gg OTUs
+    if(!is.na(repSeqPath)) stop("Path to representative sequences required!")
+    species_table = get_otus_from_seqvar(species_table[,OTU], ) #Run vsearch to get gg OTUs
   } else if(database != "Greengenes 13_5 or 13_8"){
     stop("Only Greengenes currently implemented")
   }
@@ -103,7 +104,7 @@ get_subset_picrust_ko_table = function(otus, picrust_ko_table_directory, picrust
 generate_contribution_table_using_picrust = function(otu_table, picrust_norm_file, picrust_ko_table_directory, picrust_ko_table_suffix){
 
   #Convert table to relative abundances
-  otu_table = data.table(OTU = otu_table[,OTU], otu_table[,lapply(.SD, x/sum(x)), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])
+  otu_table = data.table(OTU = otu_table[,OTU], otu_table[,lapply(.SD, function(x){ return(x/sum(x))}), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])
 
   # Read the normalization table and standardize column names
   picrust_normalization_table = fread(paste("zcat ", picrust_norm_file, sep=""), header=T)

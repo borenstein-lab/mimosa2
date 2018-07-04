@@ -310,6 +310,19 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
   return(cmps_alone)
 }
 
+
+get_species_cmp_scores = function(species_table, network){
+  spec_list = species_table[,unique(OTU)]
+  if(!all(spec_list %in% network[,unique(OTU)])) stop("Some taxa missing network information")
+  for(j in 1:length(spec_list)){
+    sub_net = network[OTU==spec_list[j]]
+    spec_cmps = merge(species_table, sub_net, by = "OTU")
+    spec_cmps[,CMP:=value*coef]
+  }
+}
+
+
+
 #' Perform a series of steps related to identifying single-species contributors.
 #'
 #' @param contrib_file File where metagenome_contributions PICRUSt output is located

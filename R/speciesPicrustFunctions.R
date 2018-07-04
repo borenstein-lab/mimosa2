@@ -40,10 +40,10 @@ build_generic_network = function(species_table, database, picrust_paths, kegg_pa
   contribution_table = generate_contribution_table_using_picrust(species_table, picrust_norm_file = picrust_paths[1], picrust_ko_table_directory = picrust_paths[2], picrust_ko_table_suffix = picrust_paths[3])
   contribution_table = contribution_table[contribution != 0]
   all_kegg = get_kegg_reaction_info(kegg_paths[2], reaction_info_file = kegg_paths[3], save_out = F)
-  network_template = generate_network_template_kegg(kegg_paths[1], all_kegg = all_kegg, write_out = F)
+  network_template = generate_network_template_kegg(kegg_paths[1], all_kegg = all_kegg, write_out = F) #We should really speed this thing up
   otu_list = contribution_table[,sort(unique(OTU))]
   spec_models = rbindlist(lapply(otu_list, function(x){
-    spec_mod = network_template[KO %in% contribution_table[OTU==x, unique(KO)]]
+    spec_mod = generate_genomic_network(contribution_table[OTU==x, unique(Gene)], keggSource = "KeggTemplate", degree_filter = 40, rxn_table = network_template, normalize = F)[[3]]
     spec_mod[,OTU:=x]
     return(spec_mod)
   }))
@@ -103,8 +103,11 @@ get_subset_picrust_ko_table = function(otus, picrust_ko_table_directory, picrust
 #' @export
 generate_contribution_table_using_picrust = function(otu_table, picrust_norm_file, picrust_ko_table_directory, picrust_ko_table_suffix){
 
-  #Convert table to relative abundances
-  otu_table = data.table(OTU = otu_table[,OTU], otu_table[,lapply(.SD, function(x){ return(x/sum(x))}), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])
+  #Melt table and convert to relative abundances
+  otu_table = melt(otu_table, id.var = "OTU", value.name = "abundance", variable.name = "Sample")
+  otu_table[,abundance:=abundance/sum(abundance), by=Sample]
+  otu_table[,OTU:=as.character(OTU)]
+  #otu_table = data.table(OTU = otu_table[,as.character(OTU)], otu_table[,lapply(.SD, function(x){ return(x/sum(x))}), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])
 
   # Read the normalization table and standardize column names
   picrust_normalization_table = fread(paste("gunzip -c ", picrust_norm_file, sep=""), header=T)
@@ -113,8 +116,10 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
 
   if(!all(otu_table[,OTU] %in% picrust_normalization_table[,OTU])) stop("Not all OTUs found in PICRUSt table")
 
+
   # Get the subset of the ko table mapping present OTUs to their genomic content
-  subset_picrust_ko_table = get_subset_picrust_ko_table(levels(factor(otu_table[,OTU])))
+  subset_picrust_ko_table = get_subset_picrust_ko_table(otu_table[,unique(OTU)], picrust_ko_table_directory = picrust_ko_table_directory,
+                                                        picrust_ko_table_suffix = picrust_ko_table_suffix)
 
   # Merge with the table of 16S normalization factors
   contribution_table = merge(otu_table, picrust_normalization_table, by = "OTU", allow.cartesian = TRUE, sort = FALSE)

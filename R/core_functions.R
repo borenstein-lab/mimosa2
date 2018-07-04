@@ -72,7 +72,7 @@ get_kegg_reaction_info = function(kos_to_rxns_method, reaction_info_file = "", s
   return(all_kegg)
 }
 
-#' Generate community metabolic network template from the KEGG database, using reaction_mapformula.lst and
+#' Generate community metabolic network template from the KEGG database, using reaction_mapformula.lst
 #'
 #' @import data.table
 #' @param mapformula_file file path to "reaction_mapformula.lst" from the KEGG database, specifying reaction IDs annotated in pathways
@@ -85,6 +85,8 @@ get_kegg_reaction_info = function(kos_to_rxns_method, reaction_info_file = "", s
 generate_network_template_kegg = function(mapformula_file, all_kegg, write_out = T){
   mapformula = fread(mapformula_file, colClasses = "character", sep = ":") #get mapformula pathway annotations of reactions
   setnames(mapformula, c("Rxn","Path","ReacProd"))
+  #Remove generic path where everything is reversible
+  mapformula = mapformula[Path!=" 01100" & Path != 1100 & Path !="01100"] #If numeric
   #Process Reacs and Prods, flip reversible reactions, etc
   mapformula[,Reac:=lapply(ReacProd,function(x){ return(unlist(strsplit(x,"="))[1])})]
   mapformula[,Reac:=lapply(Reac, strsplit, " ")]
@@ -121,14 +123,13 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
     }
   }
   mapformula = new_mapformula
-  mapformula = mapformula[Path!=" 01100" & Path != 1100 & Path !="01100"] #If numeric
   mapformula = merge(mapformula, all_kegg$kos_to_rxns, by="Rxn", all.x=T, all.y=F, allow.cartesian=T)
   mapformula = mapformula[!is.na(KO)]
   setkey(mapformula, NULL)
   rxn_table = unique(mapformula)
   rxn_table_sub = unique(rxn_table[,list(Rxn,KO,Reac,Prod)])
   ## Exclude information that is not consistent with reaction annotation file
-  rxn_id_check = sapply(1:length(rxn_table_sub[,Rxn]), function(x){
+  rxn_table_sub[,Check:=sapply(1:length(Rxn), function(x){
     ind = which(all_kegg$Reactions==rxn_table_sub[x,Rxn])
     if(length(ind) < 1){ return("noMatch")
     } else if(!(rxn_table_sub[x,KO] %in% names(all_kegg$Reaction_info[[ind]]$ORTHOLOGY)|rxn_table_sub[x,KO] %in% all_kegg$Reaction_info[[ind]]$ORTHOLOGY | rxn_table_sub[x,KO] %in% gsub("KO: ", "", all_kegg$Reaction_info[[ind]]$ORTHOLOGY))){
@@ -138,9 +139,10 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
       return("noCmpdmatch")
     }
     else return("good")
-  })
-  if(nrow(rxn_table_sub[rxn_id_check=="good"])==0) stop("Problem with reaction table formatting")
-  rxn_table_sub = rxn_table_sub[rxn_id_check=="good"]
+  })]
+  if(rxn_table_sub[,sum(Check=="good")==0]) stop("Problem with reaction table formatting")
+  rxn_table_sub = rxn_table_sub[Check=="good"]
+  rxn_table_sub[,Check:=NULL]
   rxn_table = merge(rxn_table, rxn_table_sub, by=c("Rxn","KO","Reac","Prod"), all.x=F)
 
   #get stoichiometry too
@@ -191,7 +193,7 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
 #' generate_genomic_network(kos, "KeggTemplate", degree_filter = 30)
 #' @export
 generate_genomic_network = function(kos, keggSource = "KeggTemplate", degree_filter = 0,
-                                    minpath_file = '', normalize = T, rxn_table = "", networkFile=""){
+                                    minpath_file = '', normalize = T, rxn_table = "", networkFile="", return_mats = T){
   #keggSource must be either "labKegg", or "loadNet" for if the network has already been generated, or "metacyc"
   #degree filter says whether to filter hub compounds with a degree greater than this value
   if(!keggSource %in% c("loadNet", "KeggTemplate", "metacyc")){
@@ -239,34 +241,50 @@ generate_genomic_network = function(kos, keggSource = "KeggTemplate", degree_fil
     goodkos = unique(rxn_table[,KO])
     #expand into adjacency and stoichiometry matrices
     #cat("Making stoichiometric matrix\n")
-    network_mat = matrix(rep(0), nrow = length(cmpds), ncol = length(goodkos))
-    stoich_mat = matrix(rep(NA), nrow = length(cmpds), ncol = length(goodkos))
-    for(j in 1:length(rxn_table[,KO])){
-      foo1 = match(rxn_table[j,Reac], cmpds)
-      foo2 = match(rxn_table[j,Prod], cmpds)
-      fooko = match(rxn_table[j,KO], goodkos)
-      network_mat[foo1, fooko] = network_mat[foo1, fooko] - rxn_table[j,stoichReac]
-      network_mat[foo2, fooko] = network_mat[foo2, fooko] + rxn_table[j, stoichProd]
-      if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
-      if(is.na(stoich_mat[foo2,fooko])) stoich_mat[foo2,fooko] = 1*rxn_table[j,stoichProd] else stoich_mat[foo2,fooko] = stoich_mat[foo2, fooko] + rxn_table[j,stoichProd] ##Luckily this doesn't affect anything
-    }
-      negsums = apply(network_mat, 1, function(x){ sum(x[x < 0])})
-      possums = apply(network_mat, 1, function(x){ sum(x[x > 0])})
-      metlen = dim(network_mat)[1]
-      for(j in 1:metlen){
-        negkos = which(network_mat[j,] < 0)
-        poskos = which(network_mat[j,] > 0)
-        if(length(negkos) > 0) network_mat[j,negkos] = network_mat[j,][negkos]/abs(negsums[j])
-        if(length(poskos) > 0) network_mat[j,poskos] = network_mat[j,][poskos]/possums[j]
+    if(return_mats){
+      network_mat = matrix(rep(0), nrow = length(cmpds), ncol = length(goodkos))
+      stoich_mat = matrix(rep(NA), nrow = length(cmpds), ncol = length(goodkos))
+      for(j in 1:length(rxn_table[,KO])){
+        foo1 = match(rxn_table[j,Reac], cmpds)
+        foo2 = match(rxn_table[j,Prod], cmpds)
+        fooko = match(rxn_table[j,KO], goodkos)
+        network_mat[foo1, fooko] = network_mat[foo1, fooko] - rxn_table[j,stoichReac]
+        network_mat[foo2, fooko] = network_mat[foo2, fooko] + rxn_table[j, stoichProd]
+        if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
+        if(is.na(stoich_mat[foo2,fooko])) stoich_mat[foo2,fooko] = 1*rxn_table[j,stoichProd] else stoich_mat[foo2,fooko] = stoich_mat[foo2, fooko] + rxn_table[j,stoichProd] ##Luckily this doesn't affect anything
       }
-    network_mat = data.frame(network_mat)
-    names(network_mat) = goodkos
-    row.names(network_mat) = cmpds
-    stoich_mat = data.frame(stoich_mat)
-    names(stoich_mat) = goodkos
-    row.names(stoich_mat) = cmpds
-    #cat("Done with network!\n")
-    return(list(network_mat, stoich_mat, rxn_table))
+      if(normalize){
+        if(length(cmpds) > 1 & length(goodkos) > 1){
+          network_mat = t(as.matrix(apply(network_mat, 1, function(x){
+            negkos = which(x < 0)
+            poskos = which(x > 0)
+            x[negkos] = x[negkos]/abs(sum(x[negkos]))
+            x[poskos] = x[poskos]/sum(x[poskos])
+            return(x)
+          })))
+        } else {
+          network_mat = sapply(network_mat, function(x){
+            negkos = which(x < 0)
+            poskos = which(x > 0)
+            x[negkos] = x[negkos]/abs(sum(x[negkos]))
+            x[poskos] = x[poskos]/sum(x[poskos])
+            return(x)
+          })
+          dim(network_mat) = c(length(cmpds), length(goodkos))
+        }
+      }
+      network_mat = data.frame(network_mat)
+      if(ncol(network_mat) != length(goodkos)) stop("Problem with KO list for network")
+      if(nrow(network_mat) != length(cmpds)) stop("Problem with compound list for network")
+      names(network_mat) = goodkos
+      row.names(network_mat) = cmpds
+      stoich_mat = data.frame(stoich_mat)
+      names(stoich_mat) = goodkos
+      row.names(stoich_mat) = cmpds
+      return(list(network_mat, stoich_mat, rxn_table))
+    } else {
+      return(rxn_table)
+    }
   } else if(keggSource == "metacyc"){
     #Get KEGG reaction IDs for these KOs
     goodrxns = sapply(all_kegg$Reaction_info, function(x){ any(names(x$ORTHOLOGY) %in% kos) | any(x$ORTHOLOGY %in% kos)})

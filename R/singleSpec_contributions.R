@@ -311,14 +311,37 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
 }
 
 
-get_species_cmp_scores = function(species_table, network){
+#' Updated version of getting all single-species CMP scores for every compound and taxon
+#'
+#' @param species_table OTU abundance table (wide format)
+#' @param network Species-specific network table, product of build_network functions
+#' @param normalize Whether to normalize rows when making the network EMM
+#' @return data.table of cmp scores for each taxon and compound
+#' @examples
+#' get_species_cmp_scores(species_data, network)
+#' @export
+get_species_cmp_scores = function(species_table, network, normalize = T){
   spec_list = species_table[,unique(OTU)]
+  species_table[,OTU:=as.character(OTU)]
+  species_table = melt(species_table, id.var = "OTU", variable.name = "Sample")
   if(!all(spec_list %in% network[,unique(OTU)])) stop("Some taxa missing network information")
-  for(j in 1:length(spec_list)){
-    sub_net = network[OTU==spec_list[j]]
-    spec_cmps = merge(species_table, sub_net, by = "OTU")
-    spec_cmps[,CMP:=value*coef]
+  network_reacs = network[,list(OTU, KO, Reac, stoichReac)]
+  network_prods = network[,list(OTU, KO, Prod, stoichProd)]
+  network_reacs[,stoichReac:=-1*stoichReac]
+  setnames(network_reacs, c("Reac", "stoichReac"), c("compound", "stoich"))
+  setnames(network_prods, c("Prod", "stoichProd"), c("compound", "stoich"))
+  if(normalize){
+    network_reacs[,stoich:=as.double(stoich)]
+    network_prods[,stoich:=as.double(stoich)]
+    network_reacs[,stoich:=stoich/abs(sum(stoich)), by=list(OTU, compound)]
+    network_prods[,stoich:=stoich/sum(stoich), by=list(OTU, compound)]
   }
+  net2 = rbind(network_reacs, network_prods, fill = T)
+  spec_cmps = merge(species_table, net2, by = "OTU", allow.cartesian = T)
+  spec_cmps[,CMP:=value*stoich]
+  spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound)]
+  setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))
+  return(spec_cmps)
 }
 
 

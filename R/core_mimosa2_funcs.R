@@ -39,10 +39,16 @@ fit_cmp_mods = function(species_cmps, fake_mets_melt){
 #' add_residuals(species_cmps, mod_results[[1]], mod_results[[2]])
 #' @export
 add_residuals = function(species_cmps, model_dat, resid_dat){
+  species_cmps = species_cmps[compound %in% model_dat[,compound]] #Let go of metabolites not measured
+  all_comps = species_cmps[,unique(compound)]
   resid_dat[,Species:="Residual"]
-  setnames(resid_dat, "Resid", "newValue")
+  if(!"Resid" %in% names(resid_dat)) setnames(resid_dat, "Resid", "newValue")
   for(x in all_comps){
-    species_cmps[compound==x, newValue:=value*model_dat[compound==x, Slope]]
+    if(!is.na(model_dat[compound==x,Slope])){
+      species_cmps[compound==x, newValue:=CMP*model_dat[compound==x, Slope]]
+    } else {
+      species_cmps[compound==x, newValue:=NA]
+    }
     species_cmps = rbind(species_cmps, resid_dat[compound==x], fill = T)
   }
   species_cmps = species_cmps[!is.na(newValue)]
@@ -60,7 +66,7 @@ add_residuals = function(species_cmps, model_dat, resid_dat){
 #' @export
 calculate_var_shares = function(species_contribution_table, valueVar = "newValue"){ #generic, table of values for each speices and sample and compound
   spec_list = species_contribution_table[,unique(Species)]
-  spec_table_wide = dcast(species_contribution_table, Sample+compound~Species, value.var = valueVar, fill = 0)
+  spec_table_wide = dcast(species_contribution_table, Sample+compound~Species, value.var = valueVar, fill = 0, fun.aggregate=sum)
   var_shares = rbindlist(lapply(spec_list, function(y){
     all1 = rbindlist(lapply(spec_list, function(x){
       foo = spec_table_wide[,cov(get(x), get(y), use="complete.obs"), by=compound]

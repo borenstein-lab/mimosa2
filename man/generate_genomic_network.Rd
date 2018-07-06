@@ -6,7 +6,7 @@
 \usage{
 generate_genomic_network(kos, keggSource = "KeggTemplate",
   degree_filter = 0, minpath_file = "", normalize = T, rxn_table = "",
-  networkFile = "")
+  networkFile = "", return_mats = T)
 }
 \arguments{
 \item{kos}{Genes to include in network (KEGG Orthology IDs)}

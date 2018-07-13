@@ -22,6 +22,8 @@ generate_genomic_network(kos, keggSource = "KeggTemplate",
 \item{rxn_table}{If keggSource is "KeggTemplate", must supply a data.table with the format of}
 
 \item{networkFile}{If keggSource is "loadNet", file that template network should be loaded from, should have same format as output of generate_network_template_kegg}
+
+\item{return_mats}{Whether to return stoichiometric matrices or just data.table list of reactions}
 }
 \value{
 List containing 3 different versions of the same network: an adjacency matrix, an adjacency matrix that differentiates between genes with a neutral effect on a compound and no effect (0 vs NA), and an edge list.

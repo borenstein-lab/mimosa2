@@ -84,4 +84,78 @@ calculate_var_shares = function(species_contribution_table, valueVar = "newValue
   return(var_shares)
 }
 
+#' Plot species contributions for a single metabolite
+#' 
+#' @import ggplot2
+#' @param varShares Dataset of contributions
+#' @param metabolite Compound to plot
+#' @param include_zeros Whether to plot taxa that do not have any contribution 
+#' @return plot of contributions
+#' @example plot_contributions(varShares)
+#' @export
+plot_contributions = function(varShares, metabolite, include_zeros = F){
+  plot_dat = varShares[compound==metabolite]
+  if(!include_zeros) plot_dat = plot_dat[VarShare != 0]
+  ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_viridis(option = "plasma", discrete = T) + geom_abline(intercept = 0, slope = 0, linetype = 2) + theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=8), axis.text.y = element_blank(), legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches")) + ylab("Contribution to variance") + coord_flip()#
+  
+}
+
+
+run_mimosa2 = function(species_file, met_file, config_file){
+  #process arguments
+  species = fread(species_file)
+  species = spec_table_fix(species)
+  mets = fread(met_file)
+  met_col_name = names(mets)[names(mets) %in% c("compound", "KEGG", "Compound", "metabolite", "Metabolite")]
+  if(length(met_col_name) != 1) stop("Ambiguous metabolite ID column name, must be one of Compound/KEGG/Metabolite")
+  setnames(mets, met_col_name, "compound")
+  shared_samps = intersect(names(species), names(mets))
+  if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
+  species = species[,c("OTU", shared_samps), with=F]
+  mets = mets[,c("compound", shared_samps), with=F]
+  configs = fread(config_file, header = F, fill = T, sep = "\t")
+  if("metagenome" %in% configs[,V1]){
+      #Metagenome data
+      #Implement this later
+  }
+  if(configs[V1=="genomeChoices", V2=="Assign KOs with PICRUSt"]){
+      if(configs[V1=="database", V2=="Sequence variants (recommended for AGORA)"]){
+        seq_list = species_table[,OTU]
+        species_table = get_otus_from_seqvar(species_table[,OTU], repSeqPath = "") #Run vsearch to get gg OTUs
+      } else if(configs[V1=="database", V2 != "Greengenes 13_5 or 13_8"]){
+        stop("Only Greengenes currently implemented")
+      }
+      contribution_table = generate_contribution_table_using_picrust(species, picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab.gz", picrust_ko_table_directory ="data/picrustGenomeData/indivGenomes/", picrust_ko_table_suffix = "_genomic_content.tab")
+      contribution_table = contribution_table[contribution != 0]
+      if("geneAdd" %in% configs[,V1]){
+        contribution_table = add_genes_to_contribution_table(contribution_table, geneAddFile)
+      }
+    } 
+    if(configs[V1=="modelTemplate", V2=="Generic KEGG metabolic model"]){
+      kegg_prefix = configs[V1=='kegg_prefix', V2]
+      network = build_generic_network(contribution_table, kegg_paths = c(paste0(kegg_prefix, "reaction_mapformula.lst"), paste0(kegg_prefix, "reaction_ko.list"), paste0(kegg_prefix, "reaction")))
+    }else{
+      network = build_species_networks_w_agora(species, configs[V1=="database", V2], closest, simThreshold)
+    }
+    if("netAdd" %in% configs[,V1]){
+      network = add_rxns_to_network(network, configs[V1=="netAddFile", V2])
+      #This will need to map between metabolite IDs possibly
+    }
+    if("Gap-fill metabolic network of each species" %in% input$netAdd){
+      #Do stuff
+    }
+    if(metType!="KEGG Compound IDs"){
+      #mets = map_to_kegg(mets)
+      #Implement this later
+    }
+    indiv_cmps = get_species_cmp_scores(species, network)
+    tot_cmps = indiv_cmps[,sum(CMP), by=list(compound, Sample)]
+    setnames(tot_cmps, "V1", "value")
+    mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
+    cmp_mods = fit_cmp_mods(tot_cmps, mets_melt)
+    indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
+    var_shares = calculate_var_shares(indiv_cmps)
+    return(list(varShares = var_shares, modelData = cmp_mods[[1]]))
+  })
+}
 

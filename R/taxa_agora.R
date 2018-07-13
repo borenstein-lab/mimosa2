@@ -1,7 +1,7 @@
 ### Taxa mapping functions, MIMOSA2
 # June 2018
 
-#' Runs BLAST to find close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species
+#' Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species
 #'
 #' @import data.table
 #' @param species_dat OTU/sequence/species table of abundances
@@ -53,6 +53,16 @@ get_rep_seqs_from_otus = function(otus, database = "Greengenes 13_5 or 13_8", re
   return(seq_dat)
 }
 
+#' Assign seq vars to gg OTUs using vsearch
+#' 
+#' @import devtools
+#' @import data.table
+#' @param seqs vector of sequence variants
+#' @param repSeqPath File path to reference database
+get_otus_from_seqvar = function(seqs, repSeqPath){
+  system_output("vsearch --usearch_global")
+}
+
 #' BLASTS a set of sequences against a database
 #'
 #' @import data.table
@@ -70,6 +80,30 @@ blast_seqs = function(seqs, blast_path = "data/blastDB/"){
   }
   return(blast_out)
 }
+
+#' Aligns a set of sequences against a database using vsearch
+#'
+#' @import data.table
+#' @param seqs Biostrings object of sequences
+#' @param database_path Path to database
+#' @return Mapping results
+#' @examples
+#' vsearch_map_seqs(seqs, database_path = "path")
+#' @export
+vsearch_map_seqs = function(seqs, database_path = "data/blastDB/"){
+  write(seqs, file = "") #Write temp fasta (Biostrings?)
+  for(j in 1:length(seqs)){
+    system(paste0("vsearch --usearch_global ", seqs[j], " --strand=both --top_hits_only --db=", database_path))
+  }
+  system("rm temp*") #rm temp fasta
+  hits_list = fread("vsearch_out")
+  system("rm vsearch_out*") #rm temp fasta
+  
+  return(hits_list)
+}
+
+
+
 
 #' Returns the column from the picrust tables that corresponds to the genomic content of the indicated OTU
 #'

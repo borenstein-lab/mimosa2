@@ -188,6 +188,7 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
 #' @param normalize Whether to normalize output matrix to show relative impacts of each gene on each compound
 #' @param rxn_table If keggSource is "KeggTemplate", must supply a data.table with the format of
 #' @param networkFile If keggSource is "loadNet", file that template network should be loaded from, should have same format as output of generate_network_template_kegg
+#' @param return_mats Whether to return stoichiometric matrices or just data.table list of reactions
 #' @return List containing 3 different versions of the same network: an adjacency matrix, an adjacency matrix that differentiates between genes with a neutral effect on a compound and no effect (0 vs NA), and an edge list.
 #' @examples
 #' generate_genomic_network(kos, "KeggTemplate", degree_filter = 30)

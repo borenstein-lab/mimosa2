@@ -18,27 +18,16 @@ spec_table_fix = function(species_table){
 
 
 
-#' Function called by run_pipeline to get species-specific KOs and reactions
+#' Function called by run_pipeline to get species-specific reaction network
 #'
 #' @import data.table
-#' @param species_table OTU/seq table
-#' @param database ESV/GReengenes/SILVA
-#' @param picrust_paths paths to PICRUSt info files
+#' @param contribution_table OTU/seq table
 #' @param kegg_paths paths to KEGG network files
 #' @return Table of species-specific KEGG reactions
 #' @examples
 #' build_generic_network(species_table, "Greengenes 13_5 or 13_8", picrust_paths, kegg_paths)
 #' @export
-build_generic_network = function(species_table, database, picrust_paths, kegg_paths, repSeqPath = NA){
-  if(database=="Sequence variants (recommended for AGORA)"){
-    seq_list = species_table[,OTU]
-    if(!is.na(repSeqPath)) stop("Path to representative sequences required!")
-    species_table = get_otus_from_seqvar(species_table[,OTU], ) #Run vsearch to get gg OTUs
-  } else if(database != "Greengenes 13_5 or 13_8"){
-    stop("Only Greengenes currently implemented")
-  }
-  contribution_table = generate_contribution_table_using_picrust(species_table, picrust_norm_file = picrust_paths[1], picrust_ko_table_directory = picrust_paths[2], picrust_ko_table_suffix = picrust_paths[3])
-  contribution_table = contribution_table[contribution != 0]
+build_generic_network = function(contribution_table, database, picrust_paths, kegg_paths){
   if(length(list.files(path = gsub("/reaction.*", "", kegg_paths[3]), pattern = "network_template.txt")) > 0){
     network_template = fread(paste0(gsub("/reaction.*", "", kegg_paths[3]), "/network_template.txt"))
   } else {
@@ -47,7 +36,7 @@ build_generic_network = function(species_table, database, picrust_paths, kegg_pa
   }
   otu_list = contribution_table[,sort(unique(OTU))]
   spec_models = rbindlist(lapply(otu_list, function(x){
-    spec_mod = generate_genomic_network(contribution_table[OTU==x, unique(Gene)], keggSource = "KeggTemplate", degree_filter = 40, rxn_table = network_template, normalize = F)[[3]]
+    spec_mod = generate_genomic_network(contribution_table[OTU==x, unique(Gene)], keggSource = "KeggTemplate", degree_filter = 40, rxn_table = network_template, return_mats = F)
     spec_mod[,OTU:=x]
     return(spec_mod)
   }))

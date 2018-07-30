@@ -101,6 +101,15 @@ plot_contributions = function(varShares, metabolite, include_zeros = F){
 }
 
 
+#' Run a MIMOSA 2 analysis
+#' 
+#' @import data.table
+#' @param species_file Path to species abundances
+#' @param met_file Path to metabolite abundances
+#' @param config_file Path to config file
+#' @return Scaling model and variance contribution results
+#' @example run_mimosa2(species_file, met_file, config_file)
+#' @export
 run_mimosa2 = function(species_file, met_file, config_file){
   #process arguments
   species = fread(species_file)
@@ -141,7 +150,7 @@ run_mimosa2 = function(species_file, met_file, config_file){
       network = add_rxns_to_network(network, configs[V1=="netAddFile", V2])
       #This will need to map between metabolite IDs possibly
     }
-    if("Gap-fill metabolic network of each species" %in% input$netAdd){
+    if("gapFill" %in% configs[,V1]){
       #Do stuff
     }
     if(metType!="KEGG Compound IDs"){
@@ -156,6 +165,5 @@ run_mimosa2 = function(species_file, met_file, config_file){
     indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
     var_shares = calculate_var_shares(indiv_cmps)
     return(list(varShares = var_shares, modelData = cmp_mods[[1]]))
-  })
 }
 

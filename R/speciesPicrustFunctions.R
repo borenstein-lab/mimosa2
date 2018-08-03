@@ -1,6 +1,6 @@
 ### PICRUSt-single species model functions - modified from BURRITO
 
-#' Set column name of OTU table to "OTU"
+#' Set column name of OTU table to "OTU", and remove taxa with no abundance
 #'
 #' @import data.table
 #' @param species_table
@@ -12,6 +12,7 @@ spec_table_fix = function(species_table){
   otu_col = names(species_table)[names(species_table) %in% c("OTU", "#OTU ID", "Sequence", "ASV")]
   if(length(otu_col) != 1) stop("Species data must have a valid OTU/sequence column name")
   setnames(species_table, otu_col, "OTU")
+  species_table = species_table[rowSums(species_table[,names(species_table) != "OTU", with=F]) > 0]
   return(species_table)
 }
 
@@ -98,6 +99,7 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
 
   #Melt table and convert to relative abundances
   otu_table = melt(otu_table, id.var = "OTU", value.name = "abundance", variable.name = "Sample")
+  otu_table[,abundance:=as.numeric(abundance)]
   otu_table[,abundance:=abundance/sum(abundance), by=Sample]
   otu_table[,OTU:=as.character(OTU)]
   #otu_table = data.table(OTU = otu_table[,as.character(OTU)], otu_table[,lapply(.SD, function(x){ return(x/sum(x))}), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])

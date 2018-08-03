@@ -85,30 +85,32 @@ calculate_var_shares = function(species_contribution_table, valueVar = "newValue
 }
 
 #' Plot species contributions for a single metabolite
-#' 
+#'
 #' @import ggplot2
 #' @param varShares Dataset of contributions
 #' @param metabolite Compound to plot
-#' @param include_zeros Whether to plot taxa that do not have any contribution 
+#' @param include_zeros Whether to plot taxa that do not have any contribution
 #' @return plot of contributions
-#' @example plot_contributions(varShares)
+#' @examples
+#' plot_contributions(varShares)
 #' @export
 plot_contributions = function(varShares, metabolite, include_zeros = F){
   plot_dat = varShares[compound==metabolite]
   if(!include_zeros) plot_dat = plot_dat[VarShare != 0]
   ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_viridis(option = "plasma", discrete = T) + geom_abline(intercept = 0, slope = 0, linetype = 2) + theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=8), axis.text.y = element_blank(), legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches")) + ylab("Contribution to variance") + coord_flip()#
-  
+
 }
 
 
 #' Run a MIMOSA 2 analysis
-#' 
+#'
 #' @import data.table
 #' @param species_file Path to species abundances
 #' @param met_file Path to metabolite abundances
 #' @param config_file Path to config file
 #' @return Scaling model and variance contribution results
-#' @example run_mimosa2(species_file, met_file, config_file)
+#' @examples
+#' run_mimosa2(species_file, met_file, config_file)
 #' @export
 run_mimosa2 = function(species_file, met_file, config_file){
   #process arguments
@@ -129,8 +131,8 @@ run_mimosa2 = function(species_file, met_file, config_file){
   }
   if(configs[V1=="genomeChoices", V2=="Assign KOs with PICRUSt"]){
       if(configs[V1=="database", V2=="Sequence variants (recommended for AGORA)"]){
-        seq_list = species_table[,OTU]
-        species_table = get_otus_from_seqvar(species_table[,OTU], repSeqPath = "") #Run vsearch to get gg OTUs
+        seq_list = species[,OTU]
+        species_table = get_otus_from_seqvar(seq_list, repSeqDir = "~/Documents/MIMOSA2shiny/data/rep_seqs/", repSeqFile = "gg_13_5.fasta.gz", add_agora_names = F, seqID = configs[V1=="simThreshold", V2]) #Run vsearch to get gg OTUs
       } else if(configs[V1=="database", V2 != "Greengenes 13_5 or 13_8"]){
         stop("Only Greengenes currently implemented")
       }
@@ -139,12 +141,15 @@ run_mimosa2 = function(species_file, met_file, config_file){
       if("geneAdd" %in% configs[,V1]){
         contribution_table = add_genes_to_contribution_table(contribution_table, geneAddFile)
       }
-    } 
+    }
     if(configs[V1=="modelTemplate", V2=="Generic KEGG metabolic model"]){
       kegg_prefix = configs[V1=='kegg_prefix', V2]
       network = build_generic_network(contribution_table, kegg_paths = c(paste0(kegg_prefix, "reaction_mapformula.lst"), paste0(kegg_prefix, "reaction_ko.list"), paste0(kegg_prefix, "reaction")))
     }else{
-      network = build_species_networks_w_agora(species, configs[V1=="database", V2], closest, simThreshold)
+      network_results = build_species_networks_w_agora(species, configs[V1=="database", V2], closest = configs[V1=="closest", V2] != "", simThreshold = configs[V1=="simThreshold", V2], filterAbund = T)
+      species = network_results[[1]]
+      network = network_results[[2]]
+      species = species[OTU %in% network[,OTU]]
     }
     if("netAdd" %in% configs[,V1]){
       network = add_rxns_to_network(network, configs[V1=="netAddFile", V2])
@@ -158,6 +163,12 @@ run_mimosa2 = function(species_file, met_file, config_file){
       #Implement this later
     }
     indiv_cmps = get_species_cmp_scores(species, network)
+    if(configs[V1=="modelTemplate", V2=="AGORA metabolic models (recommended)"]){ #Switch to KEGG IDs at this point
+      kegg_mapping = fread("../MIMOSA2shiny/data/KEGGfiles/AGORA_KEGG_met_mappings.txt") #This should probably be part of the package data
+      indiv_cmps = merge(indiv_cmps, kegg_mapping, by.x = "compound", by.y = "met", all.x=T)
+      indiv_cmps = indiv_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
+      setnames(indiv_cmps, c("KEGG", "V1"), c("compound", "CMP"))
+    }
     tot_cmps = indiv_cmps[,sum(CMP), by=list(compound, Sample)]
     setnames(tot_cmps, "V1", "value")
     mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")

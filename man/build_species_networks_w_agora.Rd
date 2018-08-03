@@ -2,10 +2,11 @@
 % Please edit documentation in R/taxa_agora.R
 \name{build_species_networks_w_agora}
 \alias{build_species_networks_w_agora}
-\title{Runs BLAST to find close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
+\title{Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
 \usage{
 build_species_networks_w_agora(species_dat, database, closest,
-  simThreshold = NA)
+  simThreshold = NA, filterAbund = F, minMeanAbund = 0.001,
+  minSampFrac = 0.01)
 }
 \arguments{
 \item{species_dat}{OTU/sequence/species table of abundances}
@@ -17,10 +18,10 @@ build_species_networks_w_agora(species_dat, database, closest,
 \item{simThreshold}{Sequence similarity threshold for linking Greengenes to AGORA}
 }
 \value{
-Table of reactions for each species
+A list with 2 entries - one a species abundance table in terms of the new species, the second a table of reactions for each species
 }
 \description{
-Runs BLAST to find close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species
+Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species
 }
 \examples{
 build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", closest = F, simThreshold = 0.99)

@@ -313,6 +313,7 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
 
 #' Updated version of getting all single-species CMP scores for every compound and taxon
 #'
+#' @import data.table
 #' @param species_table OTU abundance table (wide format)
 #' @param network Species-specific network table, product of build_network functions
 #' @param normalize Whether to normalize rows when making the network EMM
@@ -321,6 +322,8 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
 #' get_species_cmp_scores(species_data, network)
 #' @export
 get_species_cmp_scores = function(species_table, network, normalize = T){
+  network[is.na(stoichReac), stoichReac:=0] #solve NA problem
+  network[is.na(stoichProd), stoichProd:=0]
   spec_list = species_table[,unique(OTU)]
   species_table[,OTU:=as.character(OTU)]
   species_table = melt(species_table, id.var = "OTU", variable.name = "Sample")

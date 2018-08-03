@@ -2,9 +2,9 @@
 % Please edit documentation in R/taxa_agora.R
 \name{load_agora_models}
 \alias{load_agora_models}
-\title{Reads AGORA models from Matlab files}
+\title{Reads a set of AGORA models from Matlab files}
 \usage{
-load_agora_models(agora_path = "data/AGORAmodels/")
+load_agora_models(mod_list, agora_path = "data/AGORAmodels/")
 }
 \arguments{
 \item{agora_path}{Path to AGORA files}
@@ -13,7 +13,7 @@ load_agora_models(agora_path = "data/AGORAmodels/")
 List of model objects from files
 }
 \description{
-Reads AGORA models from Matlab files
+Reads a set of AGORA models from Matlab files
 }
 \examples{
 load_agora_models("data/AGORA/")

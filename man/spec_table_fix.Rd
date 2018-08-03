@@ -2,7 +2,7 @@
 % Please edit documentation in R/speciesPicrustFunctions.R
 \name{spec_table_fix}
 \alias{spec_table_fix}
-\title{Set column name of OTU table to "OTU"}
+\title{Set column name of OTU table to "OTU", and remove taxa with no abundance}
 \usage{
 spec_table_fix(species_table)
 }
@@ -10,7 +10,7 @@ spec_table_fix(species_table)
 Species table with column name as OTU
 }
 \description{
-Set column name of OTU table to "OTU"
+Set column name of OTU table to "OTU", and remove taxa with no abundance
 }
 \examples{
 spec_table_fix(spec_table)

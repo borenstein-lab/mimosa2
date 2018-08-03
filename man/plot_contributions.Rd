@@ -2,16 +2,23 @@
 % Please edit documentation in R/core_mimosa2_funcs.R
 \name{plot_contributions}
 \alias{plot_contributions}
-\title{Plot species contributions for each metabolite}
+\title{Plot species contributions for a single metabolite}
 \usage{
-plot_contributions(varShares, numrow = 10)
+plot_contributions(varShares, metabolite, include_zeros = F)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}
+
+\item{metabolite}{Compound to plot}
+
+\item{include_zeros}{Whether to plot taxa that do not have any contribution}
 }
 \value{
 plot of contributions
 }
 \description{
-Plot species contributions for each metabolite
+Plot species contributions for a single metabolite
+}
+\examples{
+plot_contributions(varShares)
 }

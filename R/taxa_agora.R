@@ -12,7 +12,7 @@
 #' @examples
 #' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", closest = F, simThreshold = 0.99)
 #' @export
-build_species_networks_w_agora = function(species_dat, database, closest, simThreshold = NA, filterAbund = F, minMeanAbund = 0.001, minSampFrac = 0.01){
+build_species_networks_w_agora = function(species_dat, database, closest, simThreshold = NA, filterAbund = F, minMeanAbund = 0.001, minSampFrac = 0.01, usePreprocessed = T){
   if(database != "Sequence variants (recommended for AGORA)"){
     seqs = get_rep_seqs_from_otus(species_dat[,OTU], database = database)
   } else {
@@ -32,18 +32,25 @@ build_species_networks_w_agora = function(species_dat, database, closest, simThr
     seq_results_good = seq_results[V1 > minMeanAbund & V2 > minSampFrac]
     mod_list = seq_results_good[,unique(AGORA_ID)]
   }
-  agora_mods = load_agora_models(mod_list, agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/") #This takes a long time
-  agora_mats = get_S_mats(agora_mods, mod_list, edge_list = T)
+  if(usePreprocessed == F){
+    agora_mods = load_agora_models(mod_list, agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/") #This takes a long time
+    agora_mats = get_S_mats(agora_mods, mod_list, edge_list = T)
+    setnames(agora_mats, "Species", "OTU")
+  } else {
+    agora_mats = rbindlist(lapply(mod_list, function(x){
+      fread(paste0("data/AGORA/", x, "_rxns.txt"))
+    }))
+  }
   ### Convert species abundances to AGORA species IDs
   samps = names(species_dat)[!names(species_dat) %in% c("OTU", "seqID")]
   new_species = merge(species_dat, seq_results, by = "seqID", all.x=T)
   new_species = new_species[,lapply(.SD, sum), by=AGORA_ID, .SDcols = samps]
   new_species[is.na(AGORA_ID), AGORA_ID:="Other"]
   setnames(new_species, "AGORA_ID", "OTU")
-  setnames(agora_mats, "Species", "OTU")
   return(list(new_species, agora_mats))
 }
 
+#' Still need to document this
 emm_to_edge_list = function(emm){
   all_rxn_ids = names(emm)[2:ncol(emm)]
   net_melted = melt(emm, id.var = "Compound")[value != 0]
@@ -375,7 +382,7 @@ getModelInfo = function(matFile){
 #' @examples
 #' load_agora_models("data/AGORA/")
 #' @export
-load_agora_models = function(mod_list, agora_path = "data/AGORAmodels/"){
+load_agora_models = function(mod_list, agora_path = "data/AGORA/"){
   all_mod_files = paste0(mod_list, ".mat")
   all_mods = vector("list", length(mod_list))
   for(j in 1:length(all_mod_files)){

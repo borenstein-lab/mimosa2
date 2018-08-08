@@ -6,7 +6,7 @@
 \usage{
 build_species_networks_w_agora(species_dat, database, closest,
   simThreshold = NA, filterAbund = F, minMeanAbund = 0.001,
-  minSampFrac = 0.01)
+  minSampFrac = 0.01, usePreprocessed = T)
 }
 \arguments{
 \item{species_dat}{OTU/sequence/species table of abundances}

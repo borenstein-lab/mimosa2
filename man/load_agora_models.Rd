@@ -4,9 +4,11 @@
 \alias{load_agora_models}
 \title{Reads a set of AGORA models from Matlab files}
 \usage{
-load_agora_models(mod_list, agora_path = "data/AGORAmodels/")
+load_agora_models(mod_list, agora_path = "data/AGORA/")
 }
 \arguments{
+\item{mod_list}{List of species/model IDs to load}
+
 \item{agora_path}{Path to AGORA files}
 }
 \value{
@@ -16,5 +18,5 @@ List of model objects from files
 Reads a set of AGORA models from Matlab files
 }
 \examples{
-load_agora_models("data/AGORA/")
+load_agora_models(species_list, "data/AGORA/")
 }

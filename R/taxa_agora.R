@@ -50,7 +50,14 @@ build_species_networks_w_agora = function(species_dat, database, closest, simThr
   return(list(new_species, agora_mats))
 }
 
-#' Still need to document this
+#' Convert stoichiometric matrix to edge list of reactions
+#'
+#' @import data.table
+#' @param emm Stoichiometric matrix (rows are metabolites, columns are reactions) 
+#' @return A data.table where each row is a pair of compounds being exchanged in a reaction
+#' @examples
+#' emm_to_edge_list(s_mat)
+#' @export
 emm_to_edge_list = function(emm){
   all_rxn_ids = names(emm)[2:ncol(emm)]
   net_melted = melt(emm, id.var = "Compound")[value != 0]
@@ -78,6 +85,16 @@ emm_to_edge_list = function(emm){
   return(edge_list)
 }
 
+#' Convert stoichiometric matrix to edge list of reactions
+#'
+#' @import data.table
+#' @param all_mods List of Cobra-formatted metabolic models
+#' @param species_names List of species names for each model
+#' @param edge_list Whether to return the metabolic network as a stoichiometric matrix or edge list
+#' @return Either a stoichiometric matrix or edge list of reactions
+#' @examples
+#' get_S_mats(all_mods, my_species, edge_list = T)
+#' @export
 get_S_mats = function(all_mods, species_names, edge_list = F){
   #get S matrices
   all_S_mat = list()
@@ -377,10 +394,11 @@ getModelInfo = function(matFile){
 #'
 #' @import data.table
 #' @import R.matlab
+#' @param mod_list List of species/model IDs to load
 #' @param agora_path Path to AGORA files
 #' @return List of model objects from files
 #' @examples
-#' load_agora_models("data/AGORA/")
+#' load_agora_models(species_list, "data/AGORA/")
 #' @export
 load_agora_models = function(mod_list, agora_path = "data/AGORA/"){
   all_mod_files = paste0(mod_list, ".mat")

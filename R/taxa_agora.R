@@ -12,33 +12,25 @@
 #' @examples
 #' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", closest = F, simThreshold = 0.99)
 #' @export
-build_species_networks_w_agora = function(species_dat, database, closest, simThreshold = NA, filterAbund = F, minMeanAbund = 0.001, minSampFrac = 0.01, usePreprocessed = T){
-  if(database != "Sequence variants (recommended for AGORA)"){
-    seqs = get_rep_seqs_from_otus(species_dat[,OTU], database = database)
+build_species_networks_w_agora = function(species_dat, database, closest, simThreshold = NA, usePreprocessed = T){
+  if(database != database_choices[1]){
+    seq_results = get_agora_from_otus(species_dat[,OTU], database = database)
   } else {
     seqs = species_dat[,OTU]
+    seq_results = get_otus_from_seqvar(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.fna", method = "vsearch", file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T)
   }
+  species_dat[,seqID:=paste0("seq", 1:nrow(species_dat))]
   if(closest == T){
   }
-  seq_results = get_otus_from_seqvar(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.fna", method = "vsearch", file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T)
   #Now load AGORA models
   mod_list = seq_results[,unique(AGORA_ID)]
-  if(filterAbund){
-    species_dat[,seqID:=paste0("seq", 1:nrow(species_dat))]
-    species2 = melt(species_dat, id.vars = c("OTU", "seqID"))
-    species2[,relAbund:=value/sum(value), by=variable]
-    mean_abunds = species2[,list(mean(relAbund), sum(relAbund != 0)/length(relAbund)), by=list(OTU, seqID)]
-    seq_results = merge(seq_results, mean_abunds, by = "seqID", all.x = T) #Doesn't account for partial matches
-    seq_results_good = seq_results[V1 > minMeanAbund & V2 > minSampFrac]
-    mod_list = seq_results_good[,unique(AGORA_ID)]
-  }
   if(usePreprocessed == F){
     agora_mods = load_agora_models(mod_list, agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/") #This takes a long time
     agora_mats = get_S_mats(agora_mods, mod_list, edge_list = T)
     setnames(agora_mats, "Species", "OTU")
   } else {
     agora_mats = rbindlist(lapply(mod_list, function(x){
-      fread(paste0("data/AGORA/", x, "_rxns.txt"))
+      fread(paste0("~/Documents/MIMOSA2shiny/data/AGORA/", x, "_rxns.txt"))
     }))
   }
   ### Convert species abundances to AGORA species IDs
@@ -47,6 +39,7 @@ build_species_networks_w_agora = function(species_dat, database, closest, simThr
   new_species = new_species[,lapply(.SD, sum), by=AGORA_ID, .SDcols = samps]
   new_species[is.na(AGORA_ID), AGORA_ID:="Other"]
   setnames(new_species, "AGORA_ID", "OTU")
+  setnames(agora_mats, "Species", "OTU")
   return(list(new_species, agora_mats))
 }
 
@@ -275,6 +268,28 @@ build_model_components = function(all_mods, species_names, remove_rev = T, missi
   return(list(all_S_mat, all_S_mats, specRxns, specRxns_melt, reversible_rxns, all_S_mat_rev, all_S_mats_rev, specRxns_rev, specRxns_melt_rev))
 }
 
+
+
+#' Returns AGORA IDs that have been previously mapped to a set of closed-reference OTU IDs
+#'
+#' @import data.table
+#' @param otus List of OTU IDs
+#' @param database Database/method used for generating populations in the table - currently Greengenes or SILVA
+#' @param data_path File path to OTU-AGORA mapping
+#' @examples
+#' get_rep_seqs_from_otus(otu_list, "Greengenes 13_5 or 13_8", "data/rep_seqs/")
+#' @return Biostrings object containing representative sequences for each OTU in order
+#' @export
+get_agora_from_otus = function(otus, database = database_choices[2], data_path = "data/rep_seqs/agora_mapping/"){
+  if(grepl("Greengenes", database)){
+    dat_file = paste0(data_path, "gg_agora_vsearch_matches.txt")
+  } else {
+    dat_file = paste0(data_path, "silva_agora_vsearch_matches.txt") # dat_file = paste0(rep_seq_path, "silva_132_99_16S.fna")
+  }
+  seq_mapping = fread(dat_file)
+  return(seq_mapping[OTU %in% otus])
+}
+
 #' Returns representative 16S sequences for a set of closed-reference OTU IDs
 #'
 #' @import data.table
@@ -286,7 +301,7 @@ build_model_components = function(all_mods, species_names, remove_rev = T, missi
 #' get_rep_seqs_from_otus(otu_list, "Greengenes 13_5 or 13_8", "data/rep_seqs/")
 #' @return Biostrings object containing representative sequences for each OTU in order
 #' @export
-get_rep_seqs_from_otus = function(otus, database = "Greengenes 13_5 or 13_8", rep_seq_path = "data/rep_seqs/"){
+get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_path = "data/rep_seqs/"){
   if(grepl("Greengenes", database)){
     dat_file = paste0(rep_seq_path, "gg_13_5.fasta.gz")
   } else {
@@ -327,7 +342,7 @@ get_otus_from_seqvar = function(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data
     seq_matches = data.table(seqID = names(results)[seq(1,length(results), by = 2)], databaseID = names(results)[seq(2,length(results), by = 2)])
     seq_matches[,OrigSeq:=as.vector(results)[seq(1,length(results), by = 2)]]
     if(add_agora_names){
-      seq_data = fread(paste0(repSeqDir, "agora_NCBItax_processed.txt"))
+      seq_data = fread(paste0(repSeqDir, "agora_NCBItax_processed_nodups.txt"))
       seq_matches = merge(seq_matches, seq_data, by = "databaseID", all.x = T)
     }
     system(paste0("rm ", repSeqDir, file_prefix, "*"))
@@ -377,14 +392,12 @@ blast_seqs = function(seqs, blast_path = "data/blastDB/"){
 
 
 
-#' Returns the column from the picrust tables that corresponds to the genomic content of the indicated OTU
+#' Reads metabolic model in Cobra/Matlab format
 #'
-#' @import data.table
-#' @param out OTU/seq table
-#' @param picrust_ko_table_directory
-#' @param picrust_ko_table_suffix
+#' @import R.matlab
+#' @param matFile Path to matlab-formatted AGORA model
 #' @examples
-#' get_genomic_content_from_picrust_table(otu, picrust_dir, picrust_suffix)
+#' getModelInfo(otu_file)
 #' @export
 getModelInfo = function(matFile){
   return(readMat(matFile)[[1]][,,1])
@@ -435,14 +448,13 @@ process_mat_met_file = function(mat_met_file = "BiKEGG-master/AllKEGG2BiGGmet.ma
 #'
 #' @import data.table
 #' @param agora_ids List of AGORA metabolite IDs
-#' @param kegg_table Dictionary of AGORA-KEGG IDs
 #' @return vector of KEGG IDs corresponding to agora_ids
 #' @examples
-#' get_kegg_met_ids(agora_ids, kegg_table)
+#' agora_kegg_mets(agora_ids)
 #' @export
-get_kegg_met_ids = function(agora_ids, kegg_table){
-  agora_ids_search = gsub("\\[.*", "", agora_ids)
-  return(kegg_table[genericBiGG %in% agora_ids_search, KEGG])
+agora_kegg_mets = function(agora_ids){
+  setkey(kegg_mapping, met)
+  return(kegg_mapping[agora_ids, KEGG])
 }
 
 

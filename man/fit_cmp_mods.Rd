@@ -4,12 +4,12 @@
 \alias{fit_cmp_mods}
 \title{Fits model scaling total CMPs to metabolite concentrations}
 \usage{
-fit_cmp_mods(species_cmps, fake_mets_melt)
+fit_cmp_mods(species_cmps, mets_melt)
 }
 \arguments{
 \item{species_cmps}{Table of species contribution abundances}
 
-\item{fake_mets_melt}{Table of metabolite concentrations}
+\item{mets_melt}{Table of metabolite concentrations}
 }
 \value{
 List of 2 data.tables - one with model summary results, one with model residuals

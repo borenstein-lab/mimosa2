@@ -394,6 +394,20 @@ simpleCap <- function(x) {
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 
+#' Get text constants used for MIMOSA interactive app from sysdata
+#'
+#' @param text_name Variable name indicating desired text option
+#' @return named variable with its associated text
+#' @examples
+#' get_text("database_options")
+#'
+#' @export
+get_text = function(text_name){
+  return(get(text_name))
+}
+
+
+
 #Add-ons to ggplot2
 # guides_merge <- function(gdefs) {
 #   gdefs <- lapply(gdefs, function(g) { g$hash <- paste(g$order, g$hash, sep = "z"); g})

@@ -4,7 +4,7 @@
 \alias{build_generic_network}
 \title{Function called by run_pipeline to get species-specific reaction network}
 \usage{
-build_generic_network(contribution_table, database, picrust_paths, kegg_paths)
+build_generic_network(contribution_table, kegg_paths)
 }
 \arguments{
 \item{contribution_table}{OTU/seq table}

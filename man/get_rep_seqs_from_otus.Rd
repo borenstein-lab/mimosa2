@@ -4,7 +4,7 @@
 \alias{get_rep_seqs_from_otus}
 \title{Returns representative 16S sequences for a set of closed-reference OTU IDs}
 \usage{
-get_rep_seqs_from_otus(otus, database = "Greengenes 13_5 or 13_8",
+get_rep_seqs_from_otus(otus, database = database_choices[2],
   rep_seq_path = "data/rep_seqs/")
 }
 \arguments{

@@ -326,6 +326,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T){
   network[is.na(stoichProd), stoichProd:=0]
   spec_list = species_table[,unique(OTU)]
   species_table[,OTU:=as.character(OTU)]
+  network[,OTU:=as.character(OTU)]
   species_table = melt(species_table, id.var = "OTU", variable.name = "Sample")
   if(!all(spec_list %in% network[,unique(OTU)])) stop("Some taxa missing network information")
   network_reacs = network[,list(OTU, KO, Reac, stoichReac)]

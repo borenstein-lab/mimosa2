@@ -6,6 +6,9 @@
 \usage{
 spec_table_fix(species_table)
 }
+\arguments{
+\item{species_table}{Species/OTU table}
+}
 \value{
 Species table with column name as OTU
 }

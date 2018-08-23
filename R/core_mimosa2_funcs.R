@@ -4,14 +4,14 @@
 #'
 #' @import data.table
 #' @param species_cmps Table of species contribution abundances
-#' @param fake_mets_melt Table of metabolite concentrations
+#' @param mets_melt Table of metabolite concentrations
 #' @return List of 2 data.tables - one with model summary results, one with model residuals
 #' @examples
 #' fit_cmp_mods(species_cmps, met_data)
 #' @export
-fit_cmp_mods = function(species_cmps, fake_mets_melt){
-  tot_cmps = species_cmps[,sum(value), by=list(compound, Sample)]
-  tot_cmps = merge(tot_cmps, fake_mets_melt[,list(compound, Sample, value)], by = c("compound", "Sample"))
+fit_cmp_mods = function(species_cmps, mets_melt){
+  tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
+  tot_cmps = merge(tot_cmps, mets_melt[,list(compound, Sample, value)], by = c("compound", "Sample"))
   all_comps = tot_cmps[,unique(compound)]
   model_dat = data.table(compound = all_comps)
   resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
@@ -22,6 +22,7 @@ fit_cmp_mods = function(species_cmps, fake_mets_melt){
     model_dat[x,Intercept:=scaling_coefs[1]]
     model_dat[x,Slope:=scaling_coefs[2]]
     model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
+    if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
     resid_dat[compound==all_comps[x], Resid:=scaling_resids]
   }
   return(list(model_dat, resid_dat))
@@ -42,7 +43,7 @@ add_residuals = function(species_cmps, model_dat, resid_dat){
   species_cmps = species_cmps[compound %in% model_dat[,compound]] #Let go of metabolites not measured
   all_comps = species_cmps[,unique(compound)]
   resid_dat[,Species:="Residual"]
-  if(!"Resid" %in% names(resid_dat)) setnames(resid_dat, "Resid", "newValue")
+  if("Resid" %in% names(resid_dat)) setnames(resid_dat, "Resid", "newValue")
   for(x in all_comps){
     if(!is.na(model_dat[compound==x,Slope])){
       species_cmps[compound==x, newValue:=CMP*model_dat[compound==x, Slope]]
@@ -101,6 +102,22 @@ plot_contributions = function(varShares, metabolite, include_zeros = F){
 
 }
 
+#' Plot summary of metabolite-species contributions
+#'
+#' @import ggplot2
+#' @param varShares Dataset of contributions
+#' @param include_zeros Whether to plot taxa that do not have any contribution
+#' @return plot of contributions
+#' @examples
+#' plot_summary_contributions(varShares)
+#' @export
+plot_summary_contributions = function(varShares, include_zeros = T){
+  varShares[,metName:=met_names(compound)]
+  if(!include_zeros){
+    varShares = varShares[VarShare != 0]
+  }
+  ggplot(varShares, aes(x=metName, y = as.character(Species), fill = VarShare)) + geom_tile() + theme_minimal() + theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank()) + scale_fill_gradient(low = brewer.pal(9,"Blues")[1], high = brewer.pal(9, "Blues")[9])
+}
 
 #' Run a MIMOSA 2 analysis
 #'
@@ -117,62 +134,68 @@ run_mimosa2 = function(species_file, met_file, config_file){
   species = fread(species_file)
   species = spec_table_fix(species)
   mets = fread(met_file)
-  met_col_name = names(mets)[names(mets) %in% c("compound", "KEGG", "Compound", "metabolite", "Metabolite")]
-  if(length(met_col_name) != 1) stop("Ambiguous metabolite ID column name, must be one of Compound/KEGG/Metabolite")
-  setnames(mets, met_col_name, "compound")
+  configs = fread(config_file, header = F, fill = T, sep = "\t")
+  met_nonzero_filt = ifelse(configs[V1=="metNzeroFilter", is.numeric(V2)], configs[V1=="metNzeroFilter", V2], 5)
+  mets = met_table_fix(mets, met_nonzero_filt)
+  if(configs[V1=="specNzeroFrac", is.numeric(V2)]){
+    species = filter_species_abunds(species, filter_type = "fracNonzero", configs[V1=="specNzeroFrac", V2])
+  } else { #Use default values
+    species = filter_species_abunds(species, filter_type = "fracNonzero")
+  }
+  if(configs[V1=="specMinMean", is.numeric(V2)]){
+    species = filter_species_abunds(species, filter_type = "mean", configs[V1=="specMinMean", V2])
+  } else { #Use default values
+    species = filter_species_abunds(species, filter_type = "mean")
+  }
   shared_samps = intersect(names(species), names(mets))
   if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
   species = species[,c("OTU", shared_samps), with=F]
   mets = mets[,c("compound", shared_samps), with=F]
-  configs = fread(config_file, header = F, fill = T, sep = "\t")
   if("metagenome" %in% configs[,V1]){
       #Metagenome data
       #Implement this later
   }
-  if(configs[V1=="genomeChoices", V2=="Assign KOs with PICRUSt"]){
-      if(configs[V1=="database", V2=="Sequence variants (recommended for AGORA)"]){
+  if(configs[V1=="genomeChoices", V2==source_choices[1]]){
+      if(configs[V1=="database", V2==database_choices[1]]){
         seq_list = species[,OTU]
-        species_table = get_otus_from_seqvar(seq_list, repSeqDir = "~/Documents/MIMOSA2shiny/data/rep_seqs/", repSeqFile = "gg_13_5.fasta.gz", add_agora_names = F, seqID = configs[V1=="simThreshold", V2]) #Run vsearch to get gg OTUs
-      } else if(configs[V1=="database", V2 != "Greengenes 13_5 or 13_8"]){
+        species_table = get_otus_from_seqvar(seq_list, repSeqDir = "~/Documents/MIMOSA2shiny/data/rep_seqs/", repSeqFile = "gg_13_5.fasta.gz", add_agora_names = F, seqID = 0.97) #Run vsearch to get gg OTUs
+      } else if(configs[V1=="database", V2 != database_choices[2]]){
         stop("Only Greengenes currently implemented")
       }
+    if(configs[V1=="geneAddFile", V2 != ""]){
       contribution_table = generate_contribution_table_using_picrust(species, picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab.gz", picrust_ko_table_directory ="data/picrustGenomeData/indivGenomes/", picrust_ko_table_suffix = "_genomic_content.tab")
       contribution_table = contribution_table[contribution != 0]
-      if("geneAdd" %in% configs[,V1]){
-        contribution_table = add_genes_to_contribution_table(contribution_table, geneAddFile)
-      }
+      contribution_table = add_genes_to_contribution_table(contribution_table, configs[V1=="geneAddFile", V2])
+      network = build_generic_network(contribution_table, kegg_paths = c("~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction_mapformula.lst", "~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction_ko.list", "~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction"))
+    } else { #Just load in preprocessed
+      network = get_kegg_network(species, net_path = "~/Documents/MIMOSA2shiny/data/picrustGenomeData/indivModels/")
     }
-    if(configs[V1=="modelTemplate", V2=="Generic KEGG metabolic model"]){
-      kegg_prefix = configs[V1=='kegg_prefix', V2]
-      network = build_generic_network(contribution_table, kegg_paths = c(paste0(kegg_prefix, "reaction_mapformula.lst"), paste0(kegg_prefix, "reaction_ko.list"), paste0(kegg_prefix, "reaction")))
-    }else{
-      network_results = build_species_networks_w_agora(species, configs[V1=="database", V2], closest = configs[V1=="closest", V2] != "", simThreshold = configs[V1=="simThreshold", V2], filterAbund = T)
+  }else{
+      network_results = build_species_networks_w_agora(species, configs[V1=="database", V2], closest = configs[V1=="closest", V2] != "", simThreshold = configs[V1=="simThreshold", V2])
       species = network_results[[1]]
       network = network_results[[2]]
       species = species[OTU %in% network[,OTU]]
     }
-    if("netAdd" %in% configs[,V1]){
+    if(configs[V1=="netAdd", V2 != ""]){
       network = add_rxns_to_network(network, configs[V1=="netAddFile", V2])
       #This will need to map between metabolite IDs possibly
     }
     if("gapFill" %in% configs[,V1]){
       #Do stuff
     }
-    if(metType!="KEGG Compound IDs"){
+    if(configs[V1=="metType", V2 !=met_type_choices[1]]){
       #mets = map_to_kegg(mets)
       #Implement this later
     }
     indiv_cmps = get_species_cmp_scores(species, network)
-    if(configs[V1=="modelTemplate", V2=="AGORA metabolic models (recommended)"]){ #Switch to KEGG IDs at this point
-      kegg_mapping = fread("../MIMOSA2shiny/data/KEGGfiles/AGORA_KEGG_met_mappings.txt") #This should probably be part of the package data
-      indiv_cmps = merge(indiv_cmps, kegg_mapping, by.x = "compound", by.y = "met", all.x=T)
+    if(configs[V1=="genomeChoices", V2==source_choices[2]]){ #Switch to KEGG IDs at this point
+      indiv_cmps[,KEGG:=agora_kegg_mets(compound)]
       indiv_cmps = indiv_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
+      #separate internal/external?
       setnames(indiv_cmps, c("KEGG", "V1"), c("compound", "CMP"))
     }
-    tot_cmps = indiv_cmps[,sum(CMP), by=list(compound, Sample)]
-    setnames(tot_cmps, "V1", "value")
     mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
-    cmp_mods = fit_cmp_mods(tot_cmps, mets_melt)
+    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt)
     indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
     var_shares = calculate_var_shares(indiv_cmps)
     return(list(varShares = var_shares, modelData = cmp_mods[[1]]))

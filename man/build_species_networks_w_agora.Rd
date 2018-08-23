@@ -5,8 +5,7 @@
 \title{Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
 \usage{
 build_species_networks_w_agora(species_dat, database, closest,
-  simThreshold = NA, filterAbund = F, minMeanAbund = 0.001,
-  minSampFrac = 0.01, usePreprocessed = T)
+  simThreshold = NA, usePreprocessed = T)
 }
 \arguments{
 \item{species_dat}{OTU/sequence/species table of abundances}

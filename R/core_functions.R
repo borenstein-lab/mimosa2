@@ -426,6 +426,9 @@ generate_genomic_network = function(kos, keggSource = "KeggTemplate", degree_fil
   }
 }
 
+
+
+
 #' Calculate CMP scores based on community network and gene abundances
 #'
 #' @import data.table

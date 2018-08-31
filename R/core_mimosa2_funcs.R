@@ -113,6 +113,7 @@ plot_contributions = function(varShares, metabolite, include_zeros = F){
 #' @export
 plot_summary_contributions = function(varShares, include_zeros = T){
   varShares[,metName:=met_names(compound)]
+  cat(varShares)
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
   }

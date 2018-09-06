@@ -3,6 +3,7 @@
 export("%||%")
 export(add_metadata_to_metabolite_summary)
 export(add_residuals)
+export(add_rxns_to_network)
 export(agora_kegg_mets)
 export(blast_seqs)
 export(build_generic_network)

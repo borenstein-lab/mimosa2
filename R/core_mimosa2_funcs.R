@@ -127,27 +127,31 @@ plot_summary_contributions = function(varShares, include_zeros = T){
 #' Read in files for a MIMOSA 2 analysis
 #'
 #' @import data.table
-#' @param config_table Data.table of configuration settings, including paths to abundance data files
-#' @return list of 2 processed abundance data.tables
+#' @param file_list List of shiny file inputs to load
+#' @param configTable Table of configuration parameters
+#' @return list of processed abundance data.tables
 #' @examples
-#' read_mimosa2_files(config_table)
+#' read_mimosa2_files(input_file_list, config_table)
 #' @export
-read_mimosa2_files = function(config_table){
-  if(config_table[V1=="metagenome_use", V2 != F]){
-    species = fread(config_table[V1=="file1", as.character(V2)])
+read_mimosa2_files = function(file_list, configTable){
+  if(configTable[V1=="metagenome_use", V2 == F]){
+    species = fread(file_list[["file1"]]$datapath)
     species = spec_table_fix(species)
+  } else {
+    metagenome = fread(file_list[["metagenome"]]$datapath)
+    species = get_species_from_metagenome(metagenome)
   }
-  mets = fread(config_table[V1=="file2", as.character(V2)])
-  met_nonzero_filt = ifelse(config_table[V1=="metNzeroFilter", is.numeric(V2)], config_table[V1=="metNzeroFilter", V2], 5)
+  mets = fread(file_list[["file2"]]$datapath)
+  met_nonzero_filt = ifelse(configTable[V1=="metNzeroFilter", is.numeric(V2)], configTable[V1=="metNzeroFilter", V2], 5)
   mets = met_table_fix(mets, met_nonzero_filt)
   #Filter species using default abundance values
-  if(config_table[V1=="specNzeroFrac", is.numeric(V2)]){
-    species = filter_species_abunds(species, filter_type = "fracNonzero", config_table[V1=="specNzeroFrac", V2])
+  if(configTable[V1=="specNzeroFrac", is.numeric(V2)]){
+    species = filter_species_abunds(species, filter_type = "fracNonzero", configTable[V1=="specNzeroFrac", V2])
   } else { #Use default values
     species = filter_species_abunds(species, filter_type = "fracNonzero")
   }
-  if(config_table[V1=="specMinMean", is.numeric(V2)]){
-    species = filter_species_abunds(species, filter_type = "mean", config_table[V1=="specMinMean", V2])
+  if(configTable[V1=="specMinMean", is.numeric(V2)]){
+    species = filter_species_abunds(species, filter_type = "mean", configTable[V1=="specMinMean", V2])
   } else { #Use default values
     species = filter_species_abunds(species, filter_type = "mean")
   }
@@ -157,7 +161,19 @@ read_mimosa2_files = function(config_table){
   if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
   species = species[,c("OTU", shared_samps), with=F]
   mets = mets[,c("compound", shared_samps), with=F]
-  return(list(species, mets))
+  dat_list = list(species, mets)
+  names(dat_list) = c("species", "mets")
+  for(extraFile in c("metagenome", "geneAddFile", "netAddFile")){
+    print(file_list[[extraFile]])
+    if(length(file_list[[extraFile]]) > 0 ){
+      if(file_list[[extraFile]] != F){
+        dat = fread(file_list[[extraFile]]$datapath)
+        dat_list[[length(dat_list)+1]] = dat
+        names(dat_list[[length(dat_list)]]) = extraFile
+      }
+    }
+  }
+  return(dat_list)
 }
 
 
@@ -168,9 +184,9 @@ read_mimosa2_files = function(config_table){
 #' @param config_table Data.table of input files and settings for MIMOSA
 #' @return Data.table of network model of genes and reactions for each species/taxon
 #' @examples
-#' build_metabolic_network(config_table)
+#' build_metabolic_model(config_table)
 #' @export
-build_metabolic_model = function(species, config_table){
+build_metabolic_model = function(species, config_table, geneAdd = NULL, netAdd = NULL){
   if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){
     if(config_table[V1=="database", V2==get_text("database_choices")[1]]){
       seq_list = species[,OTU]
@@ -179,29 +195,43 @@ build_metabolic_model = function(species, config_table){
     } else if(config_table[V1=="database", V2!= get_text("database_choices")[2]]){
       stop("Only Greengenes currently implemented")
     }
-    if(config_table[V1=="geneAddFile", V2 != ""]){
+    if(!is.null(geneAdd)){
       contribution_table = generate_contribution_table_using_picrust(species, picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab.gz", picrust_ko_table_directory ="data/picrustGenomeData/indivGenomes/", picrust_ko_table_suffix = "_genomic_content.tab")
-      contribution_table = add_genes_to_contribution_table(contribution_table, config_table[V1=="geneAddFile", V2])
+      contribution_table = add_genes_to_contribution_table(contribution_table, geneAdd)
       network = build_generic_network(contribution_table, kegg_paths = c("data/KEGGfiles/reaction_mapformula.lst", "data/KEGGfiles/reaction_ko.list", "data/KEGGfiles/reaction"))
     } else { #Just load in preprocessed
       network = get_kegg_network(species, net_path = "data/picrustGenomeData/indivModels/")
     }
   } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){
     if(any(grepl("[0-9]+", species[,OTU])|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", species[,OTU]))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
-    network_results = build_species_networks_w_agora(species, input$database, input$closest, input$simThreshold)
+    network_results = build_species_networks_w_agora(species, config_table[V1=="database", V2], config_table[V1=="closest", V2], config_table[V1=="simThreshold", V2])
     species = network_results[[1]]
     network = network_results[[2]]
     species = species[OTU %in% network[,OTU]]
   }
-  if(config_table[V1=="netAdd", V2 != ""]){
-    network = add_rxns_to_network(network, config_table[V1=="netAdd", V2])
+  if(!is.null(netAdd)){
+    network = add_rxns_to_network(network, netAdd)
     #This will need to map between metabolite IDs possibly
   }
-  if(config_table[V1=="gapfill", V2 != ""]){
+  if(config_table[V1=="gapfill", V2 != F]){
     #Do stuff
   }
-  return(network)
+  return(list(network, species))
 }
+
+#' Add reactions to a network
+#'
+#' @import data.table
+#' @param network Data.table of taxa, genes and reactions
+#' @param netAdd Data.table of taxa, genes and reactions to add, or generic genes and reactions to be applied to all taxa
+#' @return Expanded network table
+#' @examples
+#' add_rxns_to_network(network, netAddTable)
+#' @export
+add_rxns_to_network = function(network, netAddTable){
+  
+}
+
 
 #' Run a MIMOSA 2 analysis
 #'
@@ -214,13 +244,13 @@ build_metabolic_model = function(species, config_table){
 run_mimosa2 = function(config_table){
   #process arguments
   data_inputs = read_mimosa2_files(config_table)
-  species = data_inputs[[1]]
-  mets = data_inputs[[2]]
+  species = data_inputs$species
+  mets = data_inputs$mets
 
-  if("metagenome" %in% config_table[,V1]){
+  if(!is.null(data_inputs$metagenome)){
     #Metagenome data
     #Implement this later
-    metagenome_data = species_network_from_metagenome(config_table[V1=="fileMet", V2])
+    metagenome_data = get_species_from_metagenome(data_inputs$metagenome)
     species2 = metagenome_data[[1]]
     metagenome_network = metagenome_data[[2]]
       #Metagenome data

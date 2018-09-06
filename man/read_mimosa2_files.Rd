@@ -4,17 +4,19 @@
 \alias{read_mimosa2_files}
 \title{Read in files for a MIMOSA 2 analysis}
 \usage{
-read_mimosa2_files(config_table)
+read_mimosa2_files(file_list, configTable)
 }
 \arguments{
-\item{config_table}{Data.table of configuration settings, including paths to abundance data files}
+\item{file_list}{List of shiny file inputs to load}
+
+\item{configTable}{Table of configuration parameters}
 }
 \value{
-list of 2 processed abundance data.tables
+list of processed abundance data.tables
 }
 \description{
 Read in files for a MIMOSA 2 analysis
 }
 \examples{
-read_mimosa2_files(config_table)
+read_mimosa2_files(input_file_list, config_table)
 }

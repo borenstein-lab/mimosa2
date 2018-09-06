@@ -4,7 +4,8 @@
 \alias{build_metabolic_model}
 \title{Build species-specific metabolic model for MIMOSA2 analysis}
 \usage{
-build_metabolic_model(species, config_table)
+build_metabolic_model(species, config_table, geneAdd = NULL,
+  netAdd = NULL)
 }
 \arguments{
 \item{species}{Table of species/taxon abundances}
@@ -18,5 +19,5 @@ Data.table of network model of genes and reactions for each species/taxon
 Build species-specific metabolic model for MIMOSA2 analysis
 }
 \examples{
-build_metabolic_network(config_table)
+build_metabolic_model(config_table)
 }

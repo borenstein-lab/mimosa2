@@ -327,8 +327,11 @@ get_species_cmp_scores = function(species_table, network, normalize = T){
   spec_list = species_table[,unique(OTU)]
   species_table[,OTU:=as.character(OTU)]
   network[,OTU:=as.character(OTU)]
+  print(species_table)
+  print(network)
   species_table = melt(species_table, id.var = "OTU", variable.name = "Sample")
-  if(!all(spec_list %in% network[,unique(OTU)])) stop("Some taxa missing network information")
+  if(length(intersect(spec_list, network[,unique(OTU)]))==0) stop("All taxa missing network information, is this the correct network model?")
+  if(!all(spec_list %in% network[,unique(OTU)])) warning("Some taxa missing network information")
   network_reacs = network[,list(OTU, KO, Reac, stoichReac)]
   network_prods = network[,list(OTU, KO, Prod, stoichProd)]
   network_reacs[,stoichReac:=-1*stoichReac]
@@ -348,10 +351,10 @@ get_species_cmp_scores = function(species_table, network, normalize = T){
   all_comps = spec_cmps[,unique(compound)]
   if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2){ #If compounds are not KEGG IDs
     #Convert AGORA IDs to KEGG IDs
-    indiv_cmps[,KEGG:=agora_kegg_mets(compound)]
-    indiv_cmps = indiv_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
+    spec_cmps[,KEGG:=agora_kegg_mets(compound)]
+    spec_cmps = spec_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
     #separate internal/external?
-    setnames(indiv_cmps, c("KEGG", "V1"), c("compound", "CMP"))
+    setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
   }
 
   return(spec_cmps)

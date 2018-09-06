@@ -4,7 +4,8 @@
 \alias{plot_contributions}
 \title{Plot species contributions for a single metabolite}
 \usage{
-plot_contributions(varShares, metabolite, include_zeros = F)
+plot_contributions(varShares, metabolite, metIDcol = "metID",
+  include_zeros = F)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}

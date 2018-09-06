@@ -4,14 +4,10 @@
 \alias{run_mimosa2}
 \title{Run a MIMOSA 2 analysis}
 \usage{
-run_mimosa2(species_file, met_file, config_file)
+run_mimosa2(config_table)
 }
 \arguments{
-\item{species_file}{Path to species abundances}
-
-\item{met_file}{Path to metabolite abundances}
-
-\item{config_file}{Path to config file}
+\item{config_table}{Data.table of input files and settings for MIMOSA analysis}
 }
 \value{
 Scaling model and variance contribution results

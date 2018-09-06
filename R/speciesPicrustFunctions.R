@@ -193,7 +193,8 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
 get_kegg_network = function(species_table, net_path = "data/picrustGenomeData/indivModels/"){
   all_species = species_table[,OTU]
   all_net = rbindlist(lapply(all_species, function(x){
-    return(fread(paste0(net_path, x, "_rxns.txt")))
+    net_file = paste0(net_path, x, "_rxns.txt")
+    if(file.exists(net_file)) return(fread(net_file)) else return(NULL) #Silently skip if no network file. This is a little dangerous.
   }))
 
 }

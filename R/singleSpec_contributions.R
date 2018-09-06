@@ -345,6 +345,15 @@ get_species_cmp_scores = function(species_table, network, normalize = T){
   spec_cmps[,CMP:=value*stoich]
   spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound)]
   setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))
+  all_comps = spec_cmps[,unique(compound)]
+  if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2){ #If compounds are not KEGG IDs
+    #Convert AGORA IDs to KEGG IDs
+    indiv_cmps[,KEGG:=agora_kegg_mets(compound)]
+    indiv_cmps = indiv_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
+    #separate internal/external?
+    setnames(indiv_cmps, c("KEGG", "V1"), c("compound", "CMP"))
+  }
+
   return(spec_cmps)
 }
 

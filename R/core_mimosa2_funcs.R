@@ -95,10 +95,12 @@ calculate_var_shares = function(species_contribution_table, valueVar = "newValue
 #' @examples
 #' plot_contributions(varShares)
 #' @export
-plot_contributions = function(varShares, metabolite, include_zeros = F){
-  plot_dat = varShares[compound==metabolite]
+plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F){
+  plot_dat = varShares[get(metIDcol)==metabolite]
   if(!include_zeros) plot_dat = plot_dat[VarShare != 0]
-  ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_viridis(option = "plasma", discrete = T) + geom_abline(intercept = 0, slope = 0, linetype = 2) + theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=8), axis.text.y = element_blank(), legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches")) + ylab("Contribution to variance") + coord_flip()#
+  ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_viridis(option = "plasma", discrete = T) + geom_abline(intercept = 0, slope = 0, linetype = 2) +
+    theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=8), axis.text.y = element_blank(), legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches")) +
+    ylab("Contribution to variance") + xlab("Taxon") +  coord_flip() + ggtitle(metabolite)#
 
 }
 
@@ -112,93 +114,128 @@ plot_contributions = function(varShares, metabolite, include_zeros = F){
 #' plot_summary_contributions(varShares)
 #' @export
 plot_summary_contributions = function(varShares, include_zeros = T){
-  varShares[,metName:=met_names(compound)]
-  cat(varShares)
+  varShares[,metID:=met_names(as.character(compound))]
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
   }
-  ggplot(varShares, aes(x=metName, y = as.character(Species), fill = VarShare)) + geom_tile() + theme_minimal() + theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank()) + scale_fill_gradient(low = brewer.pal(9,"Blues")[1], high = brewer.pal(9, "Blues")[9])
+  plot1 = ggplot(varShares, aes(x=metID, y = as.character(Species), fill = VarShare)) + geom_tile() + theme_minimal() +
+    theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank()) +
+    scale_fill_gradient(low = brewer.pal(9,"Blues")[1], high = brewer.pal(9, "Blues")[9]) + xlab("Metabolite") + ylab("Taxon")
+  return(plot1)
+}
+
+#' Read in files for a MIMOSA 2 analysis
+#'
+#' @import data.table
+#' @param config_table Data.table of configuration settings, including paths to abundance data files
+#' @return list of 2 processed abundance data.tables
+#' @examples
+#' read_mimosa2_files(config_table)
+#' @export
+read_mimosa2_files = function(config_table){
+  if(config_table[V1=="metagenome_use", V2 != F]){
+    species = fread(config_table[V1=="file1", as.character(V2)])
+    species = spec_table_fix(species)
+  }
+  mets = fread(config_table[V1=="file2", as.character(V2)])
+  met_nonzero_filt = ifelse(config_table[V1=="metNzeroFilter", is.numeric(V2)], config_table[V1=="metNzeroFilter", V2], 5)
+  mets = met_table_fix(mets, met_nonzero_filt)
+  #Filter species using default abundance values
+  if(config_table[V1=="specNzeroFrac", is.numeric(V2)]){
+    species = filter_species_abunds(species, filter_type = "fracNonzero", config_table[V1=="specNzeroFrac", V2])
+  } else { #Use default values
+    species = filter_species_abunds(species, filter_type = "fracNonzero")
+  }
+  if(config_table[V1=="specMinMean", is.numeric(V2)]){
+    species = filter_species_abunds(species, filter_type = "mean", config_table[V1=="specMinMean", V2])
+  } else { #Use default values
+    species = filter_species_abunds(species, filter_type = "mean")
+  }
+  species = filter_species_abunds(species, filter_type = "fracNonzero")
+  species = filter_species_abunds(species, filter_type = "mean")
+  shared_samps = intersect(names(species), names(mets))
+  if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
+  species = species[,c("OTU", shared_samps), with=F]
+  mets = mets[,c("compound", shared_samps), with=F]
+  return(list(species, mets))
+}
+
+
+#' Build species-specific metabolic model for MIMOSA2 analysis
+#'
+#' @import data.table
+#' @param species Table of species/taxon abundances
+#' @param config_table Data.table of input files and settings for MIMOSA
+#' @return Data.table of network model of genes and reactions for each species/taxon
+#' @examples
+#' build_metabolic_network(config_table)
+#' @export
+build_metabolic_model = function(species, config_table){
+  if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){
+    if(config_table[V1=="database", V2==get_text("database_choices")[1]]){
+      seq_list = species[,OTU]
+      if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
+      species_table = get_otus_from_seqvar(seq_list, repSeqDir = "~/Documents/MIMOSA2shiny/data/rep_seqs/", repSeqFile = "gg_13_5.fasta.gz", add_agora_names = F, seqID = 0.97) #Run vsearch to get gg OTUs
+    } else if(config_table[V1=="database", V2!= get_text("database_choices")[2]]){
+      stop("Only Greengenes currently implemented")
+    }
+    if(config_table[V1=="geneAddFile", V2 != ""]){
+      contribution_table = generate_contribution_table_using_picrust(species, picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab.gz", picrust_ko_table_directory ="data/picrustGenomeData/indivGenomes/", picrust_ko_table_suffix = "_genomic_content.tab")
+      contribution_table = add_genes_to_contribution_table(contribution_table, config_table[V1=="geneAddFile", V2])
+      network = build_generic_network(contribution_table, kegg_paths = c("data/KEGGfiles/reaction_mapformula.lst", "data/KEGGfiles/reaction_ko.list", "data/KEGGfiles/reaction"))
+    } else { #Just load in preprocessed
+      network = get_kegg_network(species, net_path = "data/picrustGenomeData/indivModels/")
+    }
+  } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){
+    if(any(grepl("[0-9]+", species[,OTU])|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", species[,OTU]))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
+    network_results = build_species_networks_w_agora(species, input$database, input$closest, input$simThreshold)
+    species = network_results[[1]]
+    network = network_results[[2]]
+    species = species[OTU %in% network[,OTU]]
+  }
+  if(config_table[V1=="netAdd", V2 != ""]){
+    network = add_rxns_to_network(network, config_table[V1=="netAdd", V2])
+    #This will need to map between metabolite IDs possibly
+  }
+  if(config_table[V1=="gapfill", V2 != ""]){
+    #Do stuff
+  }
+  return(network)
 }
 
 #' Run a MIMOSA 2 analysis
 #'
 #' @import data.table
-#' @param species_file Path to species abundances
-#' @param met_file Path to metabolite abundances
-#' @param config_file Path to config file
+#' @param config_table Data.table of input files and settings for MIMOSA analysis
 #' @return Scaling model and variance contribution results
 #' @examples
 #' run_mimosa2(species_file, met_file, config_file)
 #' @export
-run_mimosa2 = function(species_file, met_file, config_file){
+run_mimosa2 = function(config_table){
   #process arguments
-  species = fread(species_file)
-  species = spec_table_fix(species)
-  mets = fread(met_file)
-  configs = fread(config_file, header = F, fill = T, sep = "\t")
-  met_nonzero_filt = ifelse(configs[V1=="metNzeroFilter", is.numeric(V2)], configs[V1=="metNzeroFilter", V2], 5)
-  mets = met_table_fix(mets, met_nonzero_filt)
-  if(configs[V1=="specNzeroFrac", is.numeric(V2)]){
-    species = filter_species_abunds(species, filter_type = "fracNonzero", configs[V1=="specNzeroFrac", V2])
-  } else { #Use default values
-    species = filter_species_abunds(species, filter_type = "fracNonzero")
-  }
-  if(configs[V1=="specMinMean", is.numeric(V2)]){
-    species = filter_species_abunds(species, filter_type = "mean", configs[V1=="specMinMean", V2])
-  } else { #Use default values
-    species = filter_species_abunds(species, filter_type = "mean")
-  }
-  shared_samps = intersect(names(species), names(mets))
-  if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
-  species = species[,c("OTU", shared_samps), with=F]
-  mets = mets[,c("compound", shared_samps), with=F]
-  if("metagenome" %in% configs[,V1]){
+  data_inputs = read_mimosa2_files(config_table)
+  species = data_inputs[[1]]
+  mets = data_inputs[[2]]
+
+  if("metagenome" %in% config_table[,V1]){
+    #Metagenome data
+    #Implement this later
+    metagenome_data = species_network_from_metagenome(config_table[V1=="fileMet", V2])
+    species2 = metagenome_data[[1]]
+    metagenome_network = metagenome_data[[2]]
       #Metagenome data
       #Implement this later
   }
-  if(configs[V1=="genomeChoices", V2==source_choices[1]]){
-      if(configs[V1=="database", V2==database_choices[1]]){
-        seq_list = species[,OTU]
-        species_table = get_otus_from_seqvar(seq_list, repSeqDir = "~/Documents/MIMOSA2shiny/data/rep_seqs/", repSeqFile = "gg_13_5.fasta.gz", add_agora_names = F, seqID = 0.97) #Run vsearch to get gg OTUs
-      } else if(configs[V1=="database", V2 != database_choices[2]]){
-        stop("Only Greengenes currently implemented")
-      }
-    if(configs[V1=="geneAddFile", V2 != ""]){
-      contribution_table = generate_contribution_table_using_picrust(species, picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab.gz", picrust_ko_table_directory ="data/picrustGenomeData/indivGenomes/", picrust_ko_table_suffix = "_genomic_content.tab")
-      contribution_table = contribution_table[contribution != 0]
-      contribution_table = add_genes_to_contribution_table(contribution_table, configs[V1=="geneAddFile", V2])
-      network = build_generic_network(contribution_table, kegg_paths = c("~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction_mapformula.lst", "~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction_ko.list", "~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction"))
-    } else { #Just load in preprocessed
-      network = get_kegg_network(species, net_path = "~/Documents/MIMOSA2shiny/data/picrustGenomeData/indivModels/")
-    }
-  }else{
-      network_results = build_species_networks_w_agora(species, configs[V1=="database", V2], closest = configs[V1=="closest", V2] != "", simThreshold = configs[V1=="simThreshold", V2])
-      species = network_results[[1]]
-      network = network_results[[2]]
-      species = species[OTU %in% network[,OTU]]
-    }
-    if(configs[V1=="netAdd", V2 != ""]){
-      network = add_rxns_to_network(network, configs[V1=="netAddFile", V2])
-      #This will need to map between metabolite IDs possibly
-    }
-    if("gapFill" %in% configs[,V1]){
-      #Do stuff
-    }
-    if(configs[V1=="metType", V2 !=met_type_choices[1]]){
+  network = build_metabolic_model(species, config_table)
+  if(config_table[V1=="metType", V2 !=met_type_choices[1]]){
       #mets = map_to_kegg(mets)
       #Implement this later
-    }
-    indiv_cmps = get_species_cmp_scores(species, network)
-    if(configs[V1=="genomeChoices", V2==source_choices[2]]){ #Switch to KEGG IDs at this point
-      indiv_cmps[,KEGG:=agora_kegg_mets(compound)]
-      indiv_cmps = indiv_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
-      #separate internal/external?
-      setnames(indiv_cmps, c("KEGG", "V1"), c("compound", "CMP"))
-    }
-    mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
-    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt)
-    indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
-    var_shares = calculate_var_shares(indiv_cmps)
-    return(list(varShares = var_shares, modelData = cmp_mods[[1]]))
+  }
+  indiv_cmps = get_species_cmp_scores(species, network)
+  mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
+  cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt)
+  indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
+  var_shares = calculate_var_shares(indiv_cmps)
+  return(list(varShares = var_shares, modelData = cmp_mods[[1]]))
 }
 

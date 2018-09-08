@@ -46,7 +46,7 @@ build_species_networks_w_agora = function(species_dat, database, closest, simThr
 #' Convert stoichiometric matrix to edge list of reactions
 #'
 #' @import data.table
-#' @param emm Stoichiometric matrix (rows are metabolites, columns are reactions) 
+#' @param emm Stoichiometric matrix (rows are metabolites, columns are reactions)
 #' @return A data.table where each row is a pair of compounds being exchanged in a reaction
 #' @examples
 #' emm_to_edge_list(s_mat)
@@ -327,27 +327,57 @@ randomString <- function() { #5 random letters and 5 random numbers
 #' @import Biostrings
 #' @param seqs vector of sequence variants
 #' @param repSeqDir File path to reference database
+#' @param repSeqFile File name with reference sequences
+#' @param method Only "vsearch" currently implemented
+#' @param vsearch_path Path to vsearch executable
+#' @param file_prefix File name prefix for output
+#' @param seqID threshold for vsearch --usearch-global search
+#' @param add_agora_names Whether to add AGORA IDs to the table
+#' @param otu_tab Whether to return an OTU table, or just the matched sequences
 #' @return Table of alignment results (original sequence, hit ID)
 #' @examples
 #' get_otus_from_seqvar(seqs)
 #' @export
-get_otus_from_seqvar = function(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.fna", method = "vsearch", file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T){
+get_otus_from_seqvar = function(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", vsearch_path = "vsearch",
+                                file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T, otu_tab = F){
   file_prefix = paste0(file_prefix, randomString())
   seqList = DNAStringSet(seqs)
   names(seqList) = paste0("seq", 1:length(seqList))
   if(method=="vsearch"){
     writeXStringSet(seqList, filepath = paste0(repSeqDir, file_prefix, ".fasta"))
-    system(paste0("vsearch --usearch_global ", repSeqDir, file_prefix, ".fasta --db ", repSeqDir, repSeqFile, " --id ", seqID," --strand both --alnout ", repSeqDir, file_prefix, "vsearch_results.txt --fastapairs ", repSeqDir, file_prefix, "vsearch_results.fna"))
-    results = readDNAStringSet(paste0(repSeqDir, file_prefix, "vsearch_results.fna"))
-    seq_matches = data.table(seqID = names(results)[seq(1,length(results), by = 2)], databaseID = names(results)[seq(2,length(results), by = 2)])
-    seq_matches[,OrigSeq:=as.vector(results)[seq(1,length(results), by = 2)]]
+    command_to_run = paste0(vsearch_path, " --usearch_global ", repSeqDir, file_prefix, ".fasta --db ", repSeqDir, repSeqFile, " --id ", seqID," --strand both --blast6out ", repSeqDir, file_prefix, "vsearch_results.txt")
+    if(otu_tab) command_to_run = paste0(command_to_run, " --otutabout ", repSeqDir, file_prefix, "otu_tab.txt")
+    if(add_agora_names) command_to_run = paste0(command_to_run, " --maxaccepts 20 --maxrejects 500")
+    system(command_to_run)
+    # results = readDNAStringSet(paste0(repSeqDir, file_prefix, "vsearch_results.fna"))
+    # seq_matches = data.table(seqID = names(results)[seq(1,length(results), by = 2)], databaseID = names(results)[seq(2,length(results), by = 2)])
+    # seq_matches[,OrigSeq:=as.vector(results)[seq(1,length(results), by = 2)]]
+    results = fread(paste0(repSeqDir, file_prefix, "vsearch_results.txt"), header = F)
+    setnames(results, paste0("V", 1:6), c("seqID", "dbID", "matchPerc", "alnlen", "mism", "gapopens"))
+    if(results[,length(dbID), by=seqID][,any(V1 != 1)]){
+      results[,max_ID:=matchPerc==max(matchPerc), by=seqID]
+      results_keep = results[max_ID==T]
+      results_keep[,longestAln:=abs(alnlen-max(alnlen)) < 5, by=seqID]
+      results_keep = results_keep[longestAln==T]
+      #Just keep the first one after this
+      results_keep[,count:=order(dbID), by=seqID]
+      seq_matches = results_keep[count==1, list(seqID, dbID, matchPerc, alnlen)]
+    } else {
+      seq_matches = results
+    }
     if(add_agora_names){
       seq_data = fread(paste0(repSeqDir, "agora_NCBItax_processed_nodups.txt"))
-      seq_matches = merge(seq_matches, seq_data, by = "databaseID", all.x = T)
+      seq_matches = merge(seq_matches, seq_data, by.x = "dbID", by.y = "databaseID", all.x = T)
     }
-    system(paste0("rm ", repSeqDir, file_prefix, "*"))
+    if(otu_tab){
+      otu_table = fread(paste0(repSeqDir, file_prefix, "otu_tab.txt"))
+      system(paste0("rm ", repSeqDir, file_prefix, "*"))
+      return(otu_table)
+    } else {
+      system(paste0("rm ", repSeqDir, file_prefix, "*"))
+      return(seq_matches)
+    }
   }
-  return(seq_matches)
 }
 
 #' BLASTS a set of sequences against a database

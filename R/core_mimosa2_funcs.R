@@ -191,7 +191,7 @@ build_metabolic_model = function(species, config_table, geneAdd = NULL, netAdd =
     if(config_table[V1=="database", V2==get_text("database_choices")[1]]){
       seq_list = species[,OTU]
       if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
-      species_table = get_otus_from_seqvar(seq_list, repSeqDir = "~/Documents/MIMOSA2shiny/data/rep_seqs/", repSeqFile = "gg_13_5.fasta.gz", add_agora_names = F, seqID = 0.97) #Run vsearch to get gg OTUs
+      species_table = get_otus_from_seqvar(seq_list, repSeqDir = "~/Documents/MIMOSA2shiny/data/rep_seqs/", repSeqFile = "gg_13_8_99_otus.udb", add_agora_names = F, seqID = 0.99) #Run vsearch to get gg OTUs
     } else if(config_table[V1=="database", V2!= get_text("database_choices")[2]]){
       stop("Only Greengenes currently implemented")
     }
@@ -229,7 +229,7 @@ build_metabolic_model = function(species, config_table, geneAdd = NULL, netAdd =
 #' add_rxns_to_network(network, netAddTable)
 #' @export
 add_rxns_to_network = function(network, netAddTable){
-  
+
 }
 
 

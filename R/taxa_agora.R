@@ -6,22 +6,19 @@
 #' @import data.table
 #' @param species_dat OTU/sequence/species table of abundances
 #' @param database Database/method used for generating populations in the table - currently Greengenes, SILVA, or sequence variants
-#' @param closest Boolean for whether to pick the closest model or any within a particular sequence similarity threshold. If F simThreshold needs to be specified.
 #' @param simThreshold Sequence similarity threshold for linking Greengenes to AGORA
 #' @return A list with 2 entries - one a species abundance table in terms of the new species, the second a table of reactions for each species
 #' @examples
-#' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", closest = F, simThreshold = 0.99)
+#' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", simThreshold = 0.99)
 #' @export
-build_species_networks_w_agora = function(species_dat, database, closest, simThreshold = NA, usePreprocessed = T){
+build_species_networks_w_agora = function(species_dat, database, simThreshold = 0.99, usePreprocessed = T){
   if(database != database_choices[1]){
     seq_results = get_agora_from_otus(species_dat[,OTU], database = database)
   } else {
     seqs = species_dat[,OTU]
-    seq_results = get_otus_from_seqvar(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.fna", method = "vsearch", file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T)
+    seq_results = get_otus_from_seqvar(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = simThreshold, add_agora_names = T)
   }
   species_dat[,seqID:=paste0("seq", 1:nrow(species_dat))]
-  if(closest == T){
-  }
   #Now load AGORA models
   mod_list = seq_results[,unique(AGORA_ID)]
   if(usePreprocessed == F){
@@ -347,7 +344,8 @@ get_otus_from_seqvar = function(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data
     writeXStringSet(seqList, filepath = paste0(repSeqDir, file_prefix, ".fasta"))
     command_to_run = paste0(vsearch_path, " --usearch_global ", repSeqDir, file_prefix, ".fasta --db ", repSeqDir, repSeqFile, " --id ", seqID," --strand both --blast6out ", repSeqDir, file_prefix, "vsearch_results.txt")
     if(otu_tab) command_to_run = paste0(command_to_run, " --otutabout ", repSeqDir, file_prefix, "otu_tab.txt")
-    if(add_agora_names) command_to_run = paste0(command_to_run, " --maxaccepts 20 --maxrejects 500")
+    if(add_agora_names) command_to_run = paste0(command_to_run, " --maxaccepts 20 --maxrejects 500") #More comprehensive search
+    print(command_to_run)
     system(command_to_run)
     # results = readDNAStringSet(paste0(repSeqDir, file_prefix, "vsearch_results.fna"))
     # seq_matches = data.table(seqID = names(results)[seq(1,length(results), by = 2)], databaseID = names(results)[seq(2,length(results), by = 2)])
@@ -487,5 +485,32 @@ agora_kegg_mets = function(agora_ids){
   return(kegg_mapping[agora_ids, KEGG])
 }
 
+#' Finds AGORA IDs for a list of KEGG metabolites (i.e. when adding to AGORA model)
+#'
+#' @import data.table
+#' @param kegg_ids List of KEGG metabolite IDs
+#' @return vector of AGORA/Cobra IDs corresponding to agora_ids
+#' @examples
+#' kegg_agora_mets(kegg_ids)
+#' @export
+kegg_agora_mets = function(kegg_ids){
+  setkey(kegg_mapping, KEGG)
+  return(kegg_mapping[kegg_ids, met])
+}
+
+#' Determines whether a list of compounds is in KEGG or AGORA format or neither
+#'
+#' @import data.table
+#' @param comp_list List of compound IDs
+#' @return Either "KEGG" or "AGORA"
+#' @examples
+#' get_compound_format(met_ids)
+#' @export
+get_compound_format = function(comp_list){
+  num_match_kegg = kegg_mapping[,sum(comp_list %in% KEGG)]
+  num_match_agora = kegg_mapping[,sum(comp_list %in% met)]
+  if(num_match_kegg < 2 & num_match_agora < 2) stop("Metabolites do not appear to be in either KEGG or COBRA format")
+  if(num_match_kegg > num_match_agora) return("KEGG") else return("AGORA")
+}
 
 

@@ -73,6 +73,18 @@ test_that("AGORA genomes and models are complete", {
 
 })
 
+test_that("Duplicate AGORA-KEGG compound mappings", {
+
+})
+
+test_that("Duplicate seq-AGORA species mappings", {
+
+})
+
+test_that("External-internal metabolites handled as expected", {
+
+})
+
 test_that("Network generation correctly removed generic pathway reactions", {
   expect_equal(nrow(rxn_table[Path==" 01100"]), 0)
   expect_equal(nrow(rxn_table[Path=="01100"]), 0)

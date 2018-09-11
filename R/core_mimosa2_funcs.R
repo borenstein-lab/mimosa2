@@ -146,17 +146,17 @@ read_mimosa2_files = function(file_list, configTable){
   mets = met_table_fix(mets, met_nonzero_filt)
   #Filter species using default abundance values
   if(configTable[V1=="specNzeroFrac", is.numeric(V2)]){
+    print(configTable[V1=="specNzeroFrac"])
     species = filter_species_abunds(species, filter_type = "fracNonzero", configTable[V1=="specNzeroFrac", V2])
   } else { #Use default values
     species = filter_species_abunds(species, filter_type = "fracNonzero")
   }
   if(configTable[V1=="specMinMean", is.numeric(V2)]){
+    print(configTable[V1=="specMinMean"])
     species = filter_species_abunds(species, filter_type = "mean", configTable[V1=="specMinMean", V2])
   } else { #Use default values
     species = filter_species_abunds(species, filter_type = "mean")
   }
-  species = filter_species_abunds(species, filter_type = "fracNonzero")
-  species = filter_species_abunds(species, filter_type = "mean")
   shared_samps = intersect(names(species), names(mets))
   if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
   species = species[,c("OTU", shared_samps), with=F]
@@ -187,6 +187,7 @@ read_mimosa2_files = function(file_list, configTable){
 #' build_metabolic_model(config_table)
 #' @export
 build_metabolic_model = function(species, config_table, geneAdd = NULL, netAdd = NULL){
+  ### Get species to use for network
   if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){
     if(config_table[V1=="database", V2==get_text("database_choices")[1]]){
       seq_list = species[,OTU]
@@ -195,43 +196,94 @@ build_metabolic_model = function(species, config_table, geneAdd = NULL, netAdd =
     } else if(config_table[V1=="database", V2!= get_text("database_choices")[2]]){
       stop("Only Greengenes currently implemented")
     }
-    if(!is.null(geneAdd)){
-      contribution_table = generate_contribution_table_using_picrust(species, picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab.gz", picrust_ko_table_directory ="data/picrustGenomeData/indivGenomes/", picrust_ko_table_suffix = "_genomic_content.tab")
-      contribution_table = add_genes_to_contribution_table(contribution_table, geneAdd)
-      network = build_generic_network(contribution_table, kegg_paths = c("data/KEGGfiles/reaction_mapformula.lst", "data/KEGGfiles/reaction_ko.list", "data/KEGGfiles/reaction"))
-    } else { #Just load in preprocessed
-      network = get_kegg_network(species, net_path = "data/picrustGenomeData/indivModels/")
-    }
+    network = get_kegg_network(species, net_path = "data/picrustGenomeData/indivModels/")
   } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){
     if(any(grepl("[0-9]+", species[,OTU])|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", species[,OTU]))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
-    network_results = build_species_networks_w_agora(species, config_table[V1=="database", V2], config_table[V1=="closest", V2], config_table[V1=="simThreshold", V2])
+    print(config_table[V1=="simThreshold", V2])
+    network_results = build_species_networks_w_agora(species, database = config_table[V1=="database", V2], simThreshold = config_table[V1=="simThreshold", V2])
     species = network_results[[1]]
     network = network_results[[2]]
     species = species[OTU %in% network[,OTU]]
   }
+  if(!is.null(geneAdd)){
+    network = add_to_network(network, geneAdd, target_format = config_table[V1=="genomeChoices"])
+  }
   if(!is.null(netAdd)){
-    network = add_rxns_to_network(network, netAdd)
-    #This will need to map between metabolite IDs possibly
+    network = add_to_network(network, netAdd, target_format = config_table[V1=="genomeChoices"])
   }
   if(config_table[V1=="gapfill", V2 != F]){
     #Do stuff
   }
+  network = filter_currency_metabolites(network, degree_filter = 30)
   return(list(network, species))
 }
 
-#' Add reactions to a network
+#' Add reactions to a network. Will set stoichiometry and copy number to 1 if missing. Format can be either "KO, Rxn, Prod" for reaction IDs with all transformations and correct stoichiometry, or just "KO" but with reaction IDs that are defined in the KEGG network.
 #'
 #' @import data.table
 #' @param network Data.table of taxa, genes and reactions
-#' @param netAdd Data.table of taxa, genes and reactions to add, or generic genes and reactions to be applied to all taxa
+#' @param addTable Data.table of taxa, genes and/or reactions to add, or generic genes and reactions to be applied to all taxa
+#' @param target_format Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra"
+#' @param source_format Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra". If NULL, will try to guess
 #' @return Expanded network table
 #' @examples
-#' add_rxns_to_network(network, netAddTable)
+#' add_to_network(network, netAddTable)
 #' @export
-add_rxns_to_network = function(network, netAddTable){
-
+add_to_network = function(network, addTable, target_format, source_format = NULL){
+  if(is.null(source_format)) source_format = get_compound_format(network[,unique(Reac)])
+  table_type = names(addTable)
+  if(all(c("KO", "Reac", "Prod") %in% table_type)){
+    if(target_format != source_format){
+      if(target_format == "Cobra"){
+        #Convert
+        addTable[,Reac:=kegg_agora_mets(Reac)]
+        addTable[,Prod:=kegg_agora_mets(Prod)]
+      } else {
+        addTable[,Reac:=agora_kegg_mets(Reac)]
+        addTable[,Prod:=agora_kegg_mets(Prod)]
+      }
+    }
+    if(!all(c("stoichReac", "stoichProd") %in% table_type)){
+      addTable[,stoichReac:=1]
+      addTable[,stoichProd:=1]
+    }
+    if(!"normalized_copy_number" %in% table_type){
+      addTable[,normalized_copy_number:=1]
+    }
+  } else if("KO" %in% table_type){
+    if(source_format != "KEGG") stop("Currently not implemented, if not KEGG format provide all compound IDs") else {
+      full_kegg_table = generate_network_template_kegg("~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction_mapformula.lst", c("~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction_ko.list", "~/Documents/MIMOSA2shiny/data/KEGGfiles/reaction"))
+      addTable = merge(addTable, full_kegg_table, by = "KO", all.x = F, all.y = F, allow.cartesian = F)
+    }
+  } else {
+    stop("Invalid format")
+  }
+  if("remove" %in% table_type){
+    removeTable = addTable[remove == T]
+    addTable = addTable[remove == F]
+  }
+  if(!"Species" %in% table_type){
+    all_spec = network[,unique(Species)]
+    new_net = data.table()
+    for(spec in all_spec){ #Propagate to all species
+      new_net1 = copy(addTable)
+      new_net1[,Species:=spec]
+      new_net = rbind(new_net, new_net1)
+    }
+    addTable = new_net
+  }
+  network = rbind(network, addTable, fill = T)
+  if("remove" %in% table_type){
+    if(!all(c("Prod", "Reac") %in% table_type)){ #If just KOs
+      network = network[!KO %in% removeTable[,KO]]
+    } else {
+      for(j in nrow(removeTable)){
+        network = network[!(KO==removeTable[j,KO] & Prod==removeTable[j,Prod] & Reac==removeTable[j,Reac])]
+      }
+    }
+  }
+  return(network)
 }
-
 
 #' Run a MIMOSA 2 analysis
 #'
@@ -254,12 +306,10 @@ run_mimosa2 = function(config_table){
     species2 = metagenome_data[[1]]
     metagenome_network = metagenome_data[[2]]
       #Metagenome data
-      #Implement this later
   }
   network = build_metabolic_model(species, config_table)
   if(config_table[V1=="metType", V2 !=met_type_choices[1]]){
       #mets = map_to_kegg(mets)
-      #Implement this later
   }
   indiv_cmps = get_species_cmp_scores(species, network)
   mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")

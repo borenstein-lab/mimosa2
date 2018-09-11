@@ -9,7 +9,7 @@ generate_network_template_kegg(mapformula_file, all_kegg, write_out = T)
 \arguments{
 \item{mapformula_file}{file path to "reaction_mapformula.lst" from the KEGG database, specifying reaction IDs annotated in pathways}
 
-\item{all_kegg}{Output of get_kegg_reaction_info}
+\item{all_kegg}{Output of get_kegg_reaction_info, OR vector of 2 file paths to input to get_kegg_reaction_info}
 
 \item{write_out}{Whether to save template to file}
 }

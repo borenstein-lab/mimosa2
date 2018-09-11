@@ -4,15 +4,13 @@
 \alias{build_species_networks_w_agora}
 \title{Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
 \usage{
-build_species_networks_w_agora(species_dat, database, closest,
-  simThreshold = NA, usePreprocessed = T)
+build_species_networks_w_agora(species_dat, database,
+  simThreshold = 0.99, usePreprocessed = T)
 }
 \arguments{
 \item{species_dat}{OTU/sequence/species table of abundances}
 
 \item{database}{Database/method used for generating populations in the table - currently Greengenes, SILVA, or sequence variants}
-
-\item{closest}{Boolean for whether to pick the closest model or any within a particular sequence similarity threshold. If F simThreshold needs to be specified.}
 
 \item{simThreshold}{Sequence similarity threshold for linking Greengenes to AGORA}
 }
@@ -23,5 +21,5 @@ A list with 2 entries - one a species abundance table in terms of the new specie
 Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species
 }
 \examples{
-build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", closest = F, simThreshold = 0.99)
+build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", simThreshold = 0.99)
 }

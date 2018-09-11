@@ -312,7 +312,7 @@ select_best_id2 = function(met_table2, met_data, net_compounds, final_method = "
       new_mets = rbind(new_mets, foo_data[,subjects,with=F])
       #figure out way to merge ones that are close in mass
       good_mets = c(good_mets, unique_ids[j])
-      met_data = met_data[!Mass %in% foo[,Mass]] #remove these peaks from consideration for future identifications
+      met_data = met_data[!Masemm_s %in% foo[,Mass]] #remove these peaks from consideration for future identifications
       met_table2 = met_table2[!Mass %in% foo[,Mass]]
     }
 #     if(nrow(foo_data) > 1){

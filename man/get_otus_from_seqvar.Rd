@@ -6,13 +6,28 @@
 \usage{
 get_otus_from_seqvar(seqs,
   repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/",
-  repSeqFile = "agora_NCBI_16S.fna", method = "vsearch",
-  file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T)
+  repSeqFile = "agora_NCBI_16S.udb", method = "vsearch",
+  vsearch_path = "vsearch", file_prefix = "seqtemp", seqID = 0.99,
+  add_agora_names = T, otu_tab = F)
 }
 \arguments{
 \item{seqs}{vector of sequence variants}
 
 \item{repSeqDir}{File path to reference database}
+
+\item{repSeqFile}{File name with reference sequences}
+
+\item{method}{Only "vsearch" currently implemented}
+
+\item{vsearch_path}{Path to vsearch executable}
+
+\item{file_prefix}{File name prefix for output}
+
+\item{seqID}{threshold for vsearch --usearch-global search}
+
+\item{add_agora_names}{Whether to add AGORA IDs to the table}
+
+\item{otu_tab}{Whether to return an OTU table, or just the matched sequences}
 }
 \value{
 Table of alignment results (original sequence, hit ID)

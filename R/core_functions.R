@@ -76,13 +76,16 @@ get_kegg_reaction_info = function(kos_to_rxns_method, reaction_info_file = "", s
 #'
 #' @import data.table
 #' @param mapformula_file file path to "reaction_mapformula.lst" from the KEGG database, specifying reaction IDs annotated in pathways
-#' @param all_kegg Output of get_kegg_reaction_info
+#' @param all_kegg Output of get_kegg_reaction_info, OR vector of 2 file paths to input to get_kegg_reaction_info
 #' @param write_out Whether to save template to file
 #' @return A table specifying a community metabolic network based on KEGG pathways with the following columns: Rxn (reaction ID),	KO (Gene ID),	Reac (Reactant ID),	Prod (Product ID),	Path (Pathway ID),	ReacProd (Original reaction specification),	stoichReac (Reactant stoichiometry coefficient),	stoichProd (Product stoichiometry coefficient)
 #' @examples
 #' generate_network_template_kegg("KEGG/ligand/reaction/reaction_mapformula.lst", all_kegg)
 #' @export
 generate_network_template_kegg = function(mapformula_file, all_kegg, write_out = T){
+  if(is.vector(all_kegg) & length(all_kegg)==2){
+    all_kegg = get_kegg_reaction_info(kos_to_rxns_method = all_kegg[1], reaction_info_file = all_kegg[2], save_out = F)
+  }
   mapformula = fread(mapformula_file, colClasses = "character", sep = ":") #get mapformula pathway annotations of reactions
   setnames(mapformula, c("Rxn","Path","ReacProd"))
   #Remove generic path where everything is reversible
@@ -178,6 +181,23 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
   return(rxn_table)
 }
 
+
+filter_currency_metabolites = function(rxn_table, degree_filter = 30){
+  setkey(rxn_table, NULL)
+  rxn_table = unique(rxn_table)
+  cmpds = unique(c(rxn_table[,Prod], rxn_table[,Reac]))
+  if(degree_filter != 0){
+    #cat("Filtering currency metabolites\n")
+    degree = sapply(cmpds, function(x){
+      rxn_table[Prod==x | Reac==x, length(unique(KO))]
+    })
+    cmpds = cmpds[degree < degree_filter]
+    degree = degree[degree < degree_filter]
+    rxn_table = rxn_table[(Prod %in% cmpds) & (Reac %in% cmpds)]
+  }
+  return(rxn_table)
+}
+
 #' Create a community metabolic network model using a few different methods.
 #'
 #' @import data.table
@@ -212,15 +232,15 @@ generate_genomic_network = function(kos, keggSource = "KeggTemplate", degree_fil
       stop("No reactions for this KO set")
     }
     #rxn_table[,rxn_id:=rxn_ids2]
-    if(minpath_file!=''){
-      minpaths = fread(minpath_file, colClasses="character")
-      setnames(minpaths,"Path")
-      #for reactions in the minpath set we are only saving the info from those minimal pathways,
-      #but we are also saving the reactions not in the minpath set
-      rxn_table2 = rxn_table[Path %in% minpaths[,Path]]
-      rxn_table_extra = rxn_table[!(Rxn %in% rxn_table2[,Rxn])]
-      rxn_table = rbind(rxn_table2, rxn_table_extra)
-    }
+    # if(minpath_file!=''){
+    #   minpaths = fread(minpath_file, colClasses="character")
+    #   setnames(minpaths,"Path")
+    #   #for reactions in the minpath set we are only saving the info from those minimal pathways,
+    #   #but we are also saving the reactions not in the minpath set
+    #   rxn_table2 = rxn_table[Path %in% minpaths[,Path]]
+    #   rxn_table_extra = rxn_table[!(Rxn %in% rxn_table2[,Rxn])]
+    #   rxn_table = rbind(rxn_table2, rxn_table_extra)
+    # }
     #No longer need extra info
     if("Path" %in% names(rxn_table)) rxn_table[,Path:=NULL]
     if("ReacProd" %in% names(rxn_table)) rxn_table[,ReacProd:=NULL]

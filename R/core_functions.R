@@ -181,7 +181,15 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
   return(rxn_table)
 }
 
-
+#' Create a community metabolic network model using a few different methods.
+#'
+#' @import data.table
+#' @param rxn_table Network table of reactions
+#' @param degree_filter Compounds involved in more than this number of reactions will be removed
+#' @return Network table without compounds found in reactions greater than the cutoff
+#' @examples
+#' filter_currency_metabolites(rxn_table, degree_filter = 50)
+#' @export
 filter_currency_metabolites = function(rxn_table, degree_filter = 30){
   setkey(rxn_table, NULL)
   rxn_table = unique(rxn_table)

@@ -321,15 +321,21 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
 #' @examples
 #' get_species_cmp_scores(species_data, network)
 #' @export
-get_species_cmp_scores = function(species_table, network, normalize = T){
+get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T){
   network[is.na(stoichReac), stoichReac:=0] #solve NA problem
   network[is.na(stoichProd), stoichProd:=0]
+  network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
+  network[,stoichProd:=stoichProd*normalized_copy_number]
   spec_list = species_table[,unique(OTU)]
   species_table[,OTU:=as.character(OTU)]
   network[,OTU:=as.character(OTU)]
-  print(species_table)
-  print(network)
   species_table = melt(species_table, id.var = "OTU", variable.name = "Sample")
+  #Convert species to relative abundance if requested
+  if(relAbund){
+    species_table[,value:=as.double(value)]
+    species_table[,value:=value/sum(value)*100, by=Sample]
+    species_table[is.nan(value), value:=0] #Just in case of all-0 samples (although this is bad for other reasons)
+  }
   if(length(intersect(spec_list, network[,unique(OTU)]))==0) stop("All taxa missing network information, is this the correct network model?")
   if(!all(spec_list %in% network[,unique(OTU)])) warning("Some taxa missing network information")
   network_reacs = network[,list(OTU, KO, Reac, stoichReac)]
@@ -360,6 +366,55 @@ get_species_cmp_scores = function(species_table, network, normalize = T){
   return(spec_cmps)
 }
 
+
+
+#' Updated version of getting all sample-level CMP scores from a KO abundance table
+#'
+#' @import data.table
+#' @param ko_table KO abundance table (wide format)
+#' @param network Species-specific network table, product of build_network functions
+#' @param normalize Whether to normalize rows when making the network EMM
+#' @return data.table of cmp scores for each taxon and compound
+#' @examples
+#' get_cmp_scores_kos(ko_data, network)
+#' @export
+get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T){
+  network[is.na(stoichReac), stoichReac:=0] #solve NA problem
+  network[is.na(stoichProd), stoichProd:=0]
+  #network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
+  #network[,stoichProd:=stoichProd*normalized_copy_number]
+  ko_table_melt = melt(ko_table, id.var = "KO", variable.name = "Sample")
+  if(relAbund){
+    ko_table_melt[,value:=as.double(value)]
+    ko_table_melt[,value:=value/sum(value)*100, by=Sample]
+  }
+  network_reacs = network[,list(KO, Reac, stoichReac)]
+  network_prods = network[,list(KO, Prod, stoichProd)]
+  network_reacs[,stoichReac:=-1*stoichReac]
+  setnames(network_reacs, c("Reac", "stoichReac"), c("compound", "stoich"))
+  setnames(network_prods, c("Prod", "stoichProd"), c("compound", "stoich"))
+  if(normalize){
+    network_reacs[,stoich:=as.double(stoich)]
+    network_prods[,stoich:=as.double(stoich)]
+    network_reacs[,stoich:=stoich/abs(sum(stoich)), by=compound]
+    network_prods[,stoich:=stoich/sum(stoich), by=compound]
+  }
+  net2 = rbind(network_reacs, network_prods, fill = T)
+  spec_cmps = merge(ko_table_melt, net2, by = "KO", allow.cartesian = T)
+  spec_cmps[,CMP:=value*stoich]
+  spec_cmps = spec_cmps[,sum(CMP), by=list(Sample, compound)]
+  setnames(spec_cmps, "V1", "CMP")
+  all_comps = spec_cmps[,unique(compound)]
+  if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2){ #If compounds are not KEGG IDs
+    #Convert AGORA IDs to KEGG IDs
+    spec_cmps[,KEGG:=agora_kegg_mets(compound)]
+    spec_cmps = spec_cmps[,sum(CMP), by=list( KEGG, Sample)] #Check that this makes sense
+    #separate internal/external?
+    setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
+  }
+  spec_cmps[,Species:="TotalMetagenome"]
+  return(spec_cmps)
+}
 
 
 #' Perform a series of steps related to identifying single-species contributors.

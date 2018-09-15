@@ -4,12 +4,14 @@
 \alias{read_mimosa2_files}
 \title{Read in files for a MIMOSA 2 analysis}
 \usage{
-read_mimosa2_files(file_list, configTable)
+read_mimosa2_files(file_list, configTable, app = T)
 }
 \arguments{
 \item{file_list}{List of shiny file inputs to load}
 
 \item{configTable}{Table of configuration parameters}
+
+\item{app}{Whether configurations are coming from the Shiny app or otherwise}
 }
 \value{
 list of processed abundance data.tables

@@ -25,8 +25,18 @@ test_that("File reading works", {
 all_kegg = get_kegg_reaction_info(test_ko_rxn_file, test_rxns_file, save_out = F, kolist = datasets[[1]][,KO])
 rxn_table = generate_network_template_kegg(test_mapformula_file, all_kegg, write_out = F)
 
-test_that("Seq var -> AGORA species", {
+test_config_file1 = ""
+test_config_file2 = ""
+test_config_file3 = ""
+test_species_seq = ""
+test_species_gg = ""
+test_species_silva = ""
+test_mets_kegg = ""
+test_mets_notkegg = ""
+# etc
 
+test_that("Seq var -> AGORA species", {
+  run_mimosa2()
 })
 
 test_that("Seq var -> Greengenes OTUs", {

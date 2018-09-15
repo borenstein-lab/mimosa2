@@ -4,40 +4,26 @@
 #' Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species
 #'
 #' @import data.table
-#' @param species_dat OTU/sequence/species table of abundances
-#' @param database Database/method used for generating populations in the table - currently Greengenes, SILVA, or sequence variants
-#' @param simThreshold Sequence similarity threshold for linking Greengenes to AGORA
+#' @param species_list List of species from mapping
+#' @param usePreprocessed Whether to process .mat files or use pre-computed versions
+#' @param agora_path Path to AGORA models
 #' @return A list with 2 entries - one a species abundance table in terms of the new species, the second a table of reactions for each species
 #' @examples
 #' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", simThreshold = 0.99)
 #' @export
-build_species_networks_w_agora = function(species_dat, database, simThreshold = 0.99, usePreprocessed = T){
-  if(database != database_choices[1]){
-    seq_results = get_agora_from_otus(species_dat[,OTU], database = database)
-  } else {
-    seqs = species_dat[,OTU]
-    seq_results = get_otus_from_seqvar(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = simThreshold, add_agora_names = T)
-  }
-  species_dat[,seqID:=paste0("seq", 1:nrow(species_dat))]
+build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/"){
   #Now load AGORA models
-  mod_list = seq_results[,unique(AGORA_ID)]
   if(usePreprocessed == F){
-    agora_mods = load_agora_models(mod_list, agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/") #This takes a long time
+    agora_mods = load_agora_models(mod_list, agora_path = agora_path) #This takes a long time
     agora_mats = get_S_mats(agora_mods, mod_list, edge_list = T)
     setnames(agora_mats, "Species", "OTU")
   } else {
     agora_mats = rbindlist(lapply(mod_list, function(x){
-      fread(paste0("~/Documents/MIMOSA2shiny/data/AGORA/", x, "_rxns.txt"))
+      fread(paste0(agora_path, x, "_rxns.txt"))
     }))
   }
-  ### Convert species abundances to AGORA species IDs
-  samps = names(species_dat)[!names(species_dat) %in% c("OTU", "seqID")]
-  new_species = merge(species_dat, seq_results, by = "seqID", all.x=T)
-  new_species = new_species[,lapply(.SD, sum), by=AGORA_ID, .SDcols = samps]
-  new_species[is.na(AGORA_ID), AGORA_ID:="Other"]
-  setnames(new_species, "AGORA_ID", "OTU")
   setnames(agora_mats, "Species", "OTU")
-  return(list(new_species, agora_mats))
+  return(agora_mats)
 }
 
 #' Convert stoichiometric matrix to edge list of reactions
@@ -315,6 +301,24 @@ get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_
 randomString <- function() { #5 random letters and 5 random numbers
   a <- do.call(paste0, replicate(5, sample(LETTERS, 1, TRUE), FALSE))
   paste0(a, sprintf("%05d", sample(9999, 1, TRUE)))
+}
+
+#' Returns AGORA species that a list of Greengenes OTUs were mapped to
+#'
+#' @import data.table
+#' @param species GG OTU abundance table
+#' @param map_file_path File path to output of gg->agora vsearch mappings
+#' @examples
+#' gg_to_agora(otu_list)
+#' @return List of AGORA species to use for model building
+#' @export
+gg_to_agora = function(otus, map_file_path = "data/rep_seqs/gg_13_8_99_toAGORA_97_map.txt"){
+  map_table = fread(map_file_path, colClasses = "character")
+  species_melt = melt(species, id.var = "OTU", variable.name = "Sample")
+  species_melt = merge(species_melt, map_table, all.x = T)
+  new_species = dcast(species_melt[,sum(value), by=list(AGORA_ID, Sample)], AGORA_ID~Sample, fill = 0)
+  setnames(new_species, "AGORA_ID", "OTU")
+  return(new_species)
 }
 
 #' Assign seq vars to OTUs or AGORA models using vsearch

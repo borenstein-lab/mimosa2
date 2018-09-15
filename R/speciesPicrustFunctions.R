@@ -81,7 +81,7 @@ build_generic_network = function(contribution_table, kegg_paths){
   }
   otu_list = contribution_table[,sort(unique(OTU))]
   spec_models = rbindlist(lapply(otu_list, function(x){
-    spec_mod = generate_genomic_network(contribution_table[OTU==x, unique(Gene)], keggSource = "KeggTemplate", degree_filter = 40, rxn_table = network_template, return_mats = F)
+    spec_mod = generate_genomic_network(contribution_table[OTU==x, unique(Gene)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
     spec_mod[,OTU:=x]
     return(spec_mod)
   }))
@@ -183,18 +183,18 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
 #' Imports pre-generated KEGG network models for each species
 #'
 #' @import data.table
-#' @param species_table OTU table (typically Greengenes)
+#' @param species_list list of OTUs (typically Greengenes)
 #' @param net_path Path to metabolic network models for each species
 #' @param net_suffix File suffix for species-level network models
 #' @return Table of KEGG reactions for each species
 #' @examples
 #' get_kegg_network(species_table)
 #' @export
-get_kegg_network = function(species_table, net_path = "data/picrustGenomeData/indivModels/"){
-  all_species = species_table[,OTU]
-  all_net = rbindlist(lapply(all_species, function(x){
-    net_file = paste0(net_path, x, "_rxns.txt")
+get_kegg_network = function(species_list, net_path = "data/picrustGenomeData/indivModels/", net_suffix = "_rxns.txt"){
+  all_net = rbindlist(lapply(species_list, function(x){
+    net_file = paste0(net_path, x, net_suffix)
     if(file.exists(net_file)) return(fread(net_file)) else return(NULL) #Silently skip if no network file. This is a little dangerous.
   }))
-
+  if(nrow(all_net)==0) stop("Network files not found for this set of species")
+  return(all_net)
 }

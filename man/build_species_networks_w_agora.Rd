@@ -4,15 +4,15 @@
 \alias{build_species_networks_w_agora}
 \title{Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
 \usage{
-build_species_networks_w_agora(species_dat, database,
-  simThreshold = 0.99, usePreprocessed = T)
+build_species_networks_w_agora(mod_list, usePreprocessed = T,
+  agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/")
 }
 \arguments{
-\item{species_dat}{OTU/sequence/species table of abundances}
+\item{usePreprocessed}{Whether to process .mat files or use pre-computed versions}
 
-\item{database}{Database/method used for generating populations in the table - currently Greengenes, SILVA, or sequence variants}
+\item{agora_path}{Path to AGORA models}
 
-\item{simThreshold}{Sequence similarity threshold for linking Greengenes to AGORA}
+\item{species_list}{List of species from mapping}
 }
 \value{
 A list with 2 entries - one a species abundance table in terms of the new species, the second a table of reactions for each species

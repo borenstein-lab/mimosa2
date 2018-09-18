@@ -34,6 +34,11 @@ test_species_silva = ""
 test_mets_kegg = ""
 test_mets_notkegg = ""
 # etc
+test_netAdd_species_genes = ""
+test_netAdd_species_rxns = ""
+test_netAdd_genes = ""
+test_netAdd_rxns = ""
+#Inculde rxns to remove in all of them as well
 
 test_that("Seq var -> AGORA species", {
   run_mimosa2()

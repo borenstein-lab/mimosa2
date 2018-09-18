@@ -243,13 +243,17 @@ build_metabolic_model = function(species, config_table, gg_path =  "data/picrust
     if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
       mod_list = species[,OTU]
     } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
-      species = gg_to_agora(species)
+      species = otus_to_agora(species)
       mod_list = species[!is.na(OTU),OTU]
     } else stop('Model option not implemented')
+  } else if(config_table[V1=="database", V2==get_text("database_choices")[3]]){ # SILVA
+    if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ # AGORA
+      species = otus_to_agora(species, "SILVA")
+      mod_list = species[!is.na(OTU), OTU]
+    } else stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
   }
   ### Now build network from mod_list
   if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
-    print(mod_list)
     if(config_table[V1=="database", !V2 %in% get_text("database_choices")[c(1, 2, 4)]]){
       stop("Only Greengenes currently implemented")
     }

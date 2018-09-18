@@ -306,14 +306,22 @@ randomString <- function() { #5 random letters and 5 random numbers
 #' Returns AGORA species that a list of Greengenes OTUs were mapped to
 #'
 #' @import data.table
-#' @param species GG OTU abundance table
-#' @param map_file_path File path to output of gg->agora vsearch mappings
+#' @param species GG or SILVA OTU abundance table
+#' @param database Greengenes or SILVA
+#' @param gg_file_path File path to output of gg->agora vsearch mappings
+#' @param silva_file_path File path to output of silva->agora vsearch mappings
 #' @examples
-#' gg_to_agora(otu_list)
+#' otus_to_agora(otu_list)
 #' @return List of AGORA species to use for model building
 #' @export
-gg_to_agora = function(otus, map_file_path = "data/rep_seqs/gg_13_8_99_toAGORA_97_map.txt"){
-  map_table = fread(map_file_path, colClasses = "character")
+otus_to_agora = function(otus, database = "Greengenes", gg_file_path = "data/rep_seqs/gg_13_8_99_toAGORA_97_map.txt", silva_file_path = "data/rep_seqs/silva_132_99_toAGORA_97_map.txt"){
+  if(database == "Greengenes"){
+    map_table = fread(gg_file_path, colClasses = "character")
+  } else if(database == "SILVA"){
+    map_table = fread(silva_file_path, colClasses = "character")
+  } else {
+    stop("Database option not found")
+  }
   species_melt = melt(species, id.var = "OTU", variable.name = "Sample")
   species_melt = merge(species_melt, map_table, all.x = T)
   new_species = dcast(species_melt[,sum(value), by=list(AGORA_ID, Sample)], AGORA_ID~Sample, fill = 0)

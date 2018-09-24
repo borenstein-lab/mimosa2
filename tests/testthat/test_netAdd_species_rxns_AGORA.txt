@@ -1,0 +1,11 @@
+Prod	Reac	KO	stoichReac	stoichProd	Species	remove
+3mob[c]	3c3hmp[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8492	
+3mob[c]	coa[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8493	
+3mob[c]	h[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8494	
+accoa[c]	3c3hmp[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8495	
+accoa[c]	coa[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8496	
+accoa[c]	h[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8497	
+h2o[c]	3c3hmp[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8498	
+h2o[c]	coa[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8499	
+h2o[c]	h[c]	3MOBS	1	1	Bacteroides_uniformis_ATCC_8500	
+3hgACPm[c]	3ogACPm[c]	3OAACPR1	1	1	Akkermansia_muciniphila_ATCC_BAA_835	1

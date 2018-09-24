@@ -63,6 +63,41 @@ filter_species_abunds = function(species_dat, filter_type = "mean", minMeanAbund
   return(species_dat[OTU %in% good_species])
 }
 
+#' Convert stoichiometric matrix to edge list of reactions
+#'
+#' @import data.table
+#' @param emm Stoichiometric matrix (rows are metabolites, columns are reactions)
+#' @return A data.table where each row is a pair of compounds being exchanged in a reaction
+#' @examples
+#' emm_to_edge_list(s_mat)
+#' @export
+emm_to_edge_list = function(emm){
+  all_rxn_ids = names(emm)[2:ncol(emm)]
+  net_melted = melt(emm, id.var = "Compound")[value != 0]
+  net_melted[,Prod:=ifelse(value > 0, Compound,0)]
+  net_melted[,Reac:=ifelse(value < 0, Compound,0)]
+  edge_list = rbindlist(lapply(all_rxn_ids, function(x){
+    rxn_sub = net_melted[variable==x]
+    if(nrow(rxn_sub[Prod !=0 ]) > 0 & nrow(rxn_sub[Reac != 0]) > 0){
+      edge_list_sub = data.table(expand.grid(rxn_sub[,unique(Reac[Reac !=0])], rxn_sub[,unique(Prod[Prod != 0])]))
+      setnames(edge_list_sub, c("Reac", "Prod"))
+    } else {
+      edge_list_sub = rxn_sub[,list(Reac, Prod)]
+      edge_list_sub[Reac==0, Reac:=NA]
+      edge_list_sub[Prod==0, Prod:=NA]
+    }
+    edge_list_sub[,KO:=x]
+    reac_info = rxn_sub[Reac != 0, list(Reac, value)]
+    setnames(reac_info, "value", "stoichReac")
+    prod_info = rxn_sub[Prod != 0, list(Prod, value)]
+    setnames(prod_info, "value", "stoichProd")
+    if(nrow(rxn_sub[Reac != 0]) > 0) edge_list_sub = merge(edge_list_sub, reac_info, by = "Reac", all.x = T)
+    if(nrow(rxn_sub[Prod != 0]) > 0) edge_list_sub = merge(edge_list_sub, prod_info, by = "Prod", all.x = T)
+  }), fill = T)
+  edge_list[,stoichReac:=-1*stoichReac]
+  return(edge_list)
+}
+
 #' Function called by run_pipeline to get species-specific reaction network
 #'
 #' @import data.table
@@ -198,3 +233,29 @@ get_kegg_network = function(species_list, net_path = "data/picrustGenomeData/ind
   if(nrow(all_net)==0) stop("Network files not found for this set of species")
   return(all_net)
 }
+
+#' Returns representative 16S sequences for a set of closed-reference OTU IDs
+#'
+#' @import data.table
+#' @import Biostrings
+#' @param otus List of OTU IDs
+#' @param database Database/method used for generating populations in the table - currently Greengenes or SILVA
+#' @param rep_seq_path File path to OTU representative sequences
+#' @examples
+#' get_rep_seqs_from_otus(otu_list, "Greengenes 13_5 or 13_8", "data/rep_seqs/")
+#' @return Biostrings object containing representative sequences for each OTU in order
+#' @export
+get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_path = "data/rep_seqs/"){
+  if(grepl("Greengenes", database)){
+    dat_file = paste0(rep_seq_path, "gg_13_5.fasta.gz")
+  } else {
+    # dat_file = paste0(rep_seq_path, "silva_132_99_16S.fna")
+  }
+  dat_index = data.table(fasta.index(dat_file))
+  desired_otus = dat_index[desc %in% otus]
+  if(nrow(desired_otus)==0) stop("No matching sequences found, is your database format correct?")
+  seq_dat = Biostrings::readDNAStringSet(dat_file)
+  seq_dat = seq_dat[which(dat_index[,desc] %in% otus)]
+  return(seq_dat)
+}
+

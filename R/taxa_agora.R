@@ -26,40 +26,6 @@ build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_p
   return(agora_mats)
 }
 
-#' Convert stoichiometric matrix to edge list of reactions
-#'
-#' @import data.table
-#' @param emm Stoichiometric matrix (rows are metabolites, columns are reactions)
-#' @return A data.table where each row is a pair of compounds being exchanged in a reaction
-#' @examples
-#' emm_to_edge_list(s_mat)
-#' @export
-emm_to_edge_list = function(emm){
-  all_rxn_ids = names(emm)[2:ncol(emm)]
-  net_melted = melt(emm, id.var = "Compound")[value != 0]
-  net_melted[,Prod:=ifelse(value > 0, Compound,0)]
-  net_melted[,Reac:=ifelse(value < 0, Compound,0)]
-  edge_list = rbindlist(lapply(all_rxn_ids, function(x){
-    rxn_sub = net_melted[variable==x]
-    if(nrow(rxn_sub[Prod !=0 ]) > 0 & nrow(rxn_sub[Reac != 0]) > 0){
-      edge_list_sub = data.table(expand.grid(rxn_sub[,unique(Reac[Reac !=0])], rxn_sub[,unique(Prod[Prod != 0])]))
-      setnames(edge_list_sub, c("Reac", "Prod"))
-    } else {
-      edge_list_sub = rxn_sub[,list(Reac, Prod)]
-      edge_list_sub[Reac==0, Reac:=NA]
-      edge_list_sub[Prod==0, Prod:=NA]
-    }
-    edge_list_sub[,KO:=x]
-    reac_info = rxn_sub[Reac != 0, list(Reac, value)]
-    setnames(reac_info, "value", "stoichReac")
-    prod_info = rxn_sub[Prod != 0, list(Prod, value)]
-    setnames(prod_info, "value", "stoichProd")
-    if(nrow(rxn_sub[Reac != 0]) > 0) edge_list_sub = merge(edge_list_sub, reac_info, by = "Reac", all.x = T)
-    if(nrow(rxn_sub[Prod != 0]) > 0) edge_list_sub = merge(edge_list_sub, prod_info, by = "Prod", all.x = T)
-  }), fill = T)
-  edge_list[,stoichReac:=-1*stoichReac]
-  return(edge_list)
-}
 
 #' Convert stoichiometric matrix to edge list of reactions
 #'
@@ -252,57 +218,6 @@ build_model_components = function(all_mods, species_names, remove_rev = T, missi
 }
 
 
-
-#' Returns AGORA IDs that have been previously mapped to a set of closed-reference OTU IDs
-#'
-#' @import data.table
-#' @param otus List of OTU IDs
-#' @param database Database/method used for generating populations in the table - currently Greengenes or SILVA
-#' @param data_path File path to OTU-AGORA mapping
-#' @examples
-#' get_rep_seqs_from_otus(otu_list, "Greengenes 13_5 or 13_8", "data/rep_seqs/")
-#' @return Biostrings object containing representative sequences for each OTU in order
-#' @export
-get_agora_from_otus = function(otus, database = database_choices[2], data_path = "data/rep_seqs/agora_mapping/"){
-  if(grepl("Greengenes", database)){
-    dat_file = paste0(data_path, "gg_agora_vsearch_matches.txt")
-  } else {
-    dat_file = paste0(data_path, "silva_agora_vsearch_matches.txt") # dat_file = paste0(rep_seq_path, "silva_132_99_16S.fna")
-  }
-  seq_mapping = fread(dat_file)
-  return(seq_mapping[OTU %in% otus])
-}
-
-#' Returns representative 16S sequences for a set of closed-reference OTU IDs
-#'
-#' @import data.table
-#' @import Biostrings
-#' @param otus List of OTU IDs
-#' @param database Database/method used for generating populations in the table - currently Greengenes or SILVA
-#' @param rep_seq_path File path to OTU representative sequences
-#' @examples
-#' get_rep_seqs_from_otus(otu_list, "Greengenes 13_5 or 13_8", "data/rep_seqs/")
-#' @return Biostrings object containing representative sequences for each OTU in order
-#' @export
-get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_path = "data/rep_seqs/"){
-  if(grepl("Greengenes", database)){
-    dat_file = paste0(rep_seq_path, "gg_13_5.fasta.gz")
-  } else {
-    # dat_file = paste0(rep_seq_path, "silva_132_99_16S.fna")
-  }
-  dat_index = data.table(fasta.index(dat_file))
-  desired_otus = dat_index[desc %in% otus]
-  if(nrow(desired_otus)==0) stop("No matching sequences found, is your database format correct?")
-  seq_dat = Biostrings::readDNAStringSet(dat_file)
-  seq_dat = seq_dat[which(dat_index[,desc] %in% otus)]
-  return(seq_dat)
-}
-
-randomString <- function() { #5 random letters and 5 random numbers
-  a <- do.call(paste0, replicate(5, sample(LETTERS, 1, TRUE), FALSE))
-  paste0(a, sprintf("%05d", sample(9999, 1, TRUE)))
-}
-
 #' Returns AGORA species that a list of Greengenes OTUs were mapped to
 #'
 #' @import data.table
@@ -329,66 +244,7 @@ otus_to_agora = function(otus, database = "Greengenes", gg_file_path = "data/rep
   return(new_species)
 }
 
-#' Assign seq vars to OTUs or AGORA models using vsearch
-#'
-#' @import devtools
-#' @import data.table
-#' @import Biostrings
-#' @param seqs vector of sequence variants
-#' @param repSeqDir File path to reference database
-#' @param repSeqFile File name with reference sequences
-#' @param method Only "vsearch" currently implemented
-#' @param vsearch_path Path to vsearch executable
-#' @param file_prefix File name prefix for output
-#' @param seqID threshold for vsearch --usearch-global search
-#' @param add_agora_names Whether to add AGORA IDs to the table
-#' @param otu_tab Whether to return an OTU table, or just the matched sequences
-#' @return Table of alignment results (original sequence, hit ID)
-#' @examples
-#' get_otus_from_seqvar(seqs)
-#' @export
-get_otus_from_seqvar = function(seqs, repSeqDir = "~/Documents/MIMOSA2shiny/data/blastDB/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", vsearch_path = "vsearch",
-                                file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T, otu_tab = F){
-  file_prefix = paste0(file_prefix, randomString())
-  seqList = DNAStringSet(seqs)
-  names(seqList) = paste0("seq", 1:length(seqList))
-  if(method=="vsearch"){
-    writeXStringSet(seqList, filepath = paste0(repSeqDir, file_prefix, ".fasta"))
-    command_to_run = paste0(vsearch_path, " --usearch_global ", repSeqDir, file_prefix, ".fasta --db ", repSeqDir, repSeqFile, " --id ", seqID," --strand both --blast6out ", repSeqDir, file_prefix, "vsearch_results.txt")
-    if(otu_tab) command_to_run = paste0(command_to_run, " --otutabout ", repSeqDir, file_prefix, "otu_tab.txt")
-    if(add_agora_names) command_to_run = paste0(command_to_run, " --maxaccepts 20 --maxrejects 500") #More comprehensive search
-    print(command_to_run)
-    system(command_to_run)
-    # results = readDNAStringSet(paste0(repSeqDir, file_prefix, "vsearch_results.fna"))
-    # seq_matches = data.table(seqID = names(results)[seq(1,length(results), by = 2)], databaseID = names(results)[seq(2,length(results), by = 2)])
-    # seq_matches[,OrigSeq:=as.vector(results)[seq(1,length(results), by = 2)]]
-    results = fread(paste0(repSeqDir, file_prefix, "vsearch_results.txt"), header = F)
-    setnames(results, paste0("V", 1:6), c("seqID", "dbID", "matchPerc", "alnlen", "mism", "gapopens"))
-    if(results[,length(dbID), by=seqID][,any(V1 != 1)]){
-      results[,max_ID:=matchPerc==max(matchPerc), by=seqID]
-      results_keep = results[max_ID==T]
-      results_keep[,longestAln:=abs(alnlen-max(alnlen)) < 5, by=seqID]
-      results_keep = results_keep[longestAln==T]
-      #Just keep the first one after this
-      results_keep[,count:=order(dbID), by=seqID]
-      seq_matches = results_keep[count==1, list(seqID, dbID, matchPerc, alnlen)]
-    } else {
-      seq_matches = results
-    }
-    if(add_agora_names){
-      seq_data = fread(paste0(repSeqDir, "agora_NCBItax_processed_nodups.txt"))
-      seq_matches = merge(seq_matches, seq_data, by.x = "dbID", by.y = "databaseID", all.x = T)
-    }
-    if(otu_tab){
-      otu_table = fread(paste0(repSeqDir, file_prefix, "otu_tab.txt"))
-      system(paste0("rm ", repSeqDir, file_prefix, "*"))
-      return(otu_table)
-    } else {
-      system(paste0("rm ", repSeqDir, file_prefix, "*"))
-      return(seq_matches)
-    }
-  }
-}
+
 
 #' BLASTS a set of sequences against a database
 #'
@@ -522,7 +378,7 @@ get_compound_format = function(comp_list){
   num_match_kegg = kegg_mapping[,sum(comp_list %in% KEGG)]
   num_match_agora = kegg_mapping[,sum(comp_list %in% met)]
   if(num_match_kegg < 2 & num_match_agora < 2) stop("Metabolites do not appear to be in either KEGG or COBRA format")
-  if(num_match_kegg > num_match_agora) return("KEGG") else return("AGORA")
+  if(num_match_kegg > num_match_agora) return("KEGG") else return("Cobra")
 }
 
 

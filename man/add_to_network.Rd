@@ -4,14 +4,15 @@
 \alias{add_to_network}
 \title{Add reactions to a network. Will set stoichiometry and copy number to 1 if missing. Format can be either "KO, Rxn, Prod" for reaction IDs with all transformations and correct stoichiometry, or just "KO" but with reaction IDs that are defined in the KEGG network.}
 \usage{
-add_to_network(network, addTable, target_format, source_format = NULL)
+add_to_network(network, addTable, target_format = NULL,
+  source_format = NULL, kegg_path = "data/KEGGfiles/")
 }
 \arguments{
 \item{network}{Data.table of taxa, genes and reactions}
 
 \item{addTable}{Data.table of taxa, genes and/or reactions to add, or generic genes and reactions to be applied to all taxa}
 
-\item{target_format}{Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra"}
+\item{target_format}{Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra". If NULL, will try to guess}
 
 \item{source_format}{Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra". If NULL, will try to guess}
 }

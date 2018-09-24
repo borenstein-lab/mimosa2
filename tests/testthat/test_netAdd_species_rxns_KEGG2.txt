@@ -1,0 +1,11 @@
+Prod	Reac	KO	stoichReac	stoichProd	Species	remove
+3mob[c]	3c3hmp[c]	3MOBS	1	1	4476780	
+3mob[c]	coa[c]	3MOBS	1	1	4476780	
+3mob[c]	h[c]	3MOBS	1	1	4476780	
+accoa[c]	3c3hmp[c]	3MOBS	1	1	4476780	
+accoa[c]	coa[c]	3MOBS	1	1	4476780	
+accoa[c]	h[c]	3MOBS	1	1	4476780	
+h2o[c]	3c3hmp[c]	3MOBS	1	1	4476780	
+h2o[c]	coa[c]	3MOBS	1	1	4476780	
+h2o[c]	h[c]	3MOBS	1	1	4476780	
+C00167	C000289	K00012	1	1	4476780	1

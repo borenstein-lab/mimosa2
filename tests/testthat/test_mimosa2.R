@@ -25,13 +25,17 @@ test_that("File reading works", {
 all_kegg = get_kegg_reaction_info(test_ko_rxn_file, test_rxns_file, save_out = F, kolist = datasets[[1]][,KO])
 rxn_table = generate_network_template_kegg(test_mapformula_file, all_kegg, write_out = F)
 
-test_config_file1 = ""
-test_config_file2 = ""
-test_config_file3 = ""
-test_species_seq = ""
-test_species_gg = ""
-test_species_silva = ""
-test_mets_kegg = ""
+test_config_file1 = "test_config_seq_agora.txt"
+test_config_file2 = "test_config_gg_agora.txt"
+test_config_file3 = "test_config_silva_agora.txt"
+test_config_file4 = "test_config_gg.txt"
+test_config_file5 = "test_config_seq_gg.txt"
+test_config_file6 = "test_config_metagenome.txt"
+test_species_seq = "test_seqs.txt"
+test_species_gg = "test_gg.txt"
+test_species_silva = "test_silva.txt"
+test_metagenome = "test_kos.txt"
+test_mets_kegg = "test_mets.txt"
 test_mets_notkegg = ""
 # etc
 test_netAdd_species_genes = ""
@@ -40,8 +44,25 @@ test_netAdd_genes = ""
 test_netAdd_rxns = ""
 #Inculde rxns to remove in all of them as well
 
+config1 = fread(test_config_file1, header = F, fill = T)
+config1_results = run_mimosa2(config1)
+#Just modify to get other config tables from this one
+
+config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+config2_results = run_mimosa2(config1)
+
+config1[V1=="database", V2:=get_text("database_choices")[2]]
+config1[V1=="file1", V2:="test_gg.txt"]
+config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
+config3_results = run_mimosa2(config1)
+
+config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
+config1[V1=="database", V2:=get_text("database_choices")[2]]
+config1[V1=="file1", V2:="test_gg.txt"]
+config1[V1=="netAdd", V2:="test_netAdd_species_rxns_AGORA.txt"]
+config4_results = run_mimosa2(config1)
 test_that("Seq var -> AGORA species", {
-  run_mimosa2()
+  
 })
 
 test_that("Seq var -> Greengenes OTUs", {

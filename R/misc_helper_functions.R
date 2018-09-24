@@ -407,6 +407,10 @@ get_text = function(text_name){
 }
 
 
+randomString <- function() { #5 random letters and 5 random numbers
+  a <- do.call(paste0, replicate(5, sample(LETTERS, 1, TRUE), FALSE))
+  paste0(a, sprintf("%05d", sample(9999, 1, TRUE)))
+}
 
 #Add-ons to ggplot2
 # guides_merge <- function(gdefs) {

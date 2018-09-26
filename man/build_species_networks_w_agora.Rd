@@ -5,7 +5,7 @@
 \title{Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
 \usage{
 build_species_networks_w_agora(mod_list, usePreprocessed = T,
-  agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/")
+  agora_path = "data/AGORA/")
 }
 \arguments{
 \item{usePreprocessed}{Whether to process .mat files or use pre-computed versions}

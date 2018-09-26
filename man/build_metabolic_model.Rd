@@ -4,15 +4,12 @@
 \alias{build_metabolic_model}
 \title{Build species-specific metabolic model for MIMOSA2 analysis}
 \usage{
-build_metabolic_model(species, config_table,
-  gg_path = "data/picrustGenomeData/indivModels/", netAdd = NULL)
+build_metabolic_model(species, config_table, netAdd = NULL)
 }
 \arguments{
 \item{species}{Table of species/taxon abundances}
 
 \item{config_table}{Data.table of input files and settings for MIMOSA}
-
-\item{gg_path}{Path to Picrust ref files}
 
 \item{netAdd}{Table of netowrk information to add to the model}
 }

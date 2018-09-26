@@ -2,197 +2,186 @@ library(data.table)
 options(stringsAsFactors = F)
 context("MIMOSA2 tests")
 
-#
-# test_gene_file = "test_genes.txt"
-# test_met_file = "test_mets.txt"
-# test_ko_rxn_file = "test_ko_reaction.txt"
-# test_rxns_file = "test_reaction.txt"
-# test_mapformula_file = "test_mapformula.txt"
-# test_contrib_file = "test_contributions.txt"
-#
-# datasets = read_files(test_gene_file, test_met_file)
-
-test_that("File reading works", {
-  expect_equal(ncol(datasets[[1]]), ncol(datasets[[2]]))
-  expect_equal(length(intersect(names(datasets[[1]]), names(datasets[[2]]))), ncol(datasets[[1]])-1)
-  expect_gt(nrow(datasets[[1]]), 0)
-  expect_gt(nrow(datasets[[2]]), 0)
-  expect_gt(ncol(datasets[[1]]), 1)
-  expect_false(any(is.na(datasets[[1]])))
-  expect_false(any(is.na(datasets[[2]])))
-})
-
-all_kegg = get_kegg_reaction_info(test_ko_rxn_file, test_rxns_file, save_out = F, kolist = datasets[[1]][,KO])
-rxn_table = generate_network_template_kegg(test_mapformula_file, all_kegg, write_out = F)
 
 test_config_file1 = "test_config_seq_agora.txt"
-test_config_file2 = "test_config_gg_agora.txt"
-test_config_file3 = "test_config_silva_agora.txt"
-test_config_file4 = "test_config_gg.txt"
-test_config_file5 = "test_config_seq_gg.txt"
-test_config_file6 = "test_config_metagenome.txt"
-test_species_seq = "test_seqs.txt"
-test_species_gg = "test_gg.txt"
-test_species_silva = "test_silva.txt"
-test_metagenome = "test_kos.txt"
-test_mets_kegg = "test_mets.txt"
-test_mets_notkegg = ""
-# etc
-test_netAdd_species_genes = ""
-test_netAdd_species_rxns = ""
-test_netAdd_genes = ""
-test_netAdd_rxns = ""
-#Inculde rxns to remove in all of them as well
-
 config1 = fread(test_config_file1, header = F, fill = T)
-config1_results = run_mimosa2(config1)
-#Just modify to get other config tables from this one
 
-config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
-config2_results = run_mimosa2(config1)
 
-config1[V1=="database", V2:=get_text("database_choices")[2]]
-config1[V1=="file1", V2:="test_gg.txt"]
-config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
-config3_results = run_mimosa2(config1)
+test_results_normal = function(config_table, file_prefix){
+  expect_silent(check_config_table(config_table))
+  config_table = check_config_table(config_table)
+  file_list = as.list(config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V2])
+  names(file_list) = config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V1]
+  data_inputs = read_mimosa2_files(file_list, config_table, app = F)
+  expect_silent(read_mimosa2_files(file_list, config_table, app = F))
+  expect_error(read_mimosa2_files(file_list, config_table, app = T))
+  species = data_inputs$species
+  mets = data_inputs$mets
+  expect_gt(nrow(species), 0)
+  expect_gt(nrow(mets), 0)
+  expect_true("OTU" %in% names(species))
+  expect_true("compound" %in% names(mets))
+  if(config_table[V1=="metType", V2!=get_text("met_type_choices")[2]]) expect_equal(get_compound_format(mets[,compound]), "KEGG")
+  expect_equal(nrow(species[is.na(OTU)]), 0)
+  expect_equal(nrow(mets[is.na(compound)]), 0)
+  network_results = build_metabolic_model(species, config_table)
+  network = network_results[[1]]
+  species = network_results[[2]]
+  expect_true("OTU" %in% names(species))
+  expect_gt(nrow(species), 0)
+  expect_true(all(c("OTU", "KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(network)))
+  expect_setequal(network[,unique(as.character(OTU))], species[,as.character(OTU)])
+  expect_known_output(network, file = paste0(file_prefix, "_net.rda"))
+  if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
+    metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table)
+    expect_equal(metagenome_network[,unique(OTU)], "TotalMetagenome")
+    expect_true(all(c("OTU", "KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(metagenome_network)))
+  }
+  if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
+    expect_warning(map_to_kegg(mets))
+    mets = map_to_kegg(mets)
+    expect_equal(get_compound_format(mets[,compound]), "KEGG")
+  }
+  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+    indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
+  } else {
+    indiv_cmps = get_species_cmp_scores(species, network)
+  }
+  expect_gt(nrow(indiv_cmps), 0)
+  expect_setequal(names(indiv_cmps), c("Species", "compound", "Sample", "CMP"))
+  expect_setequal(indiv_cmps[,unique(Sample)], names(mets)[names(mets) != "compound"])
+  expect_true(indiv_cmps[,all(is.numeric(CMP))])
+  expect_equal(nrow(indiv_cmps[is.na(compound)]), 0)
+  expect_equal(nrow(indiv_cmps[is.na(Species)]), 0)
+  expect_equal(nrow(indiv_cmps[is.na(Sample)]), 0)
+  mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
+  cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt)
+  expect_equal(nrow(cmp_mods[[1]]), length(intersect(mets[,compound], indiv_cmps[,unique(compound)])))
+  expect_equal(nrow(cmp_mods[[1]])*indiv_cmps[,length(unique(Sample))], nrow(cmp_mods[[2]]))
+  expect_true(cmp_mods[[2]][,all(is.numeric(Resid))])
+  expect_equal(nrow(cmp_mods[[2]][is.na(Resid)]), 0)
+  indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
+  expect_equal(nrow(indiv_cmps[Species=="Residual"]), nrow(cmp_mods[[2]]))
+  expect_equal(nrow(indiv_cmps[is.na(newValue)]), 0)
+  expect_true(indiv_cmps[,all(is.numeric(newValue))])
+  var_shares = calculate_var_shares(indiv_cmps)
+  expect_known_output(var_shares, file = paste0(file_prefix, "_var_shares.rda"))
+  expect_output(run_mimosa2(config_table))
+}
 
-config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
-config1[V1=="database", V2:=get_text("database_choices")[2]]
-config1[V1=="file1", V2:="test_gg.txt"]
-config1[V1=="netAdd", V2:="test_netAdd_species_rxns_AGORA.txt"]
-config4_results = run_mimosa2(config1)
+
 test_that("Seq var -> AGORA species", {
-  
+  config1 = fread(test_config_file1, header = F, fill = T)
+  test_results_normal(config1, file_prefix = "test_seq_agora")
 })
 
-test_that("Seq var -> Greengenes OTUs", {
 
-})
-
-test_that("Greengenes OTUs -> AGORA species", {
-
-})
-
-test_that("AGORA species -> network", {
-
+test_that("Seq var -> Greengenes OTUs, species-rxn KEGG mods", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_seq_gg")
 })
 
 test_that("GG OTUs -> network", {
-
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1", V2:="test_gg.txt"]
+  config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_otus_gg")
 })
 
-test_that("AGORA compounds -> KEGG compounds", {
 
+test_that("Greengenes OTUs -> AGORA species", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
+  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="file1", V2:="test_gg.txt"]
+  config1[V1=="netAdd", V2:="test_netAdd_species_rxns_AGORA.txt"]
+  test_results_normal(config1, file_prefix = "gg_agora_addAgora")
+})
+
+test_that("Greengenes OTUs -> AGORA species, KEGG add", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "gg_agora_addKEGG")
+})
+
+
+#Decide what to do about this
+test_that("Greengenes OTUs -> AGORA species, mixed add", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG2.txt"]
+  expect_error(test_results_normal(config1, file_prefix = "gg_agora_addMixed"))
+})
+
+
+test_that("Non-KEGG metabolites", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file2", V2:="test_mets_names.txt"]
+  config1 = rbind(config1, data.table(V1="metType", V2=get_text("met_type_choices")[2]))
+  test_results_normal(config1, file_prefix = "mets_names")
+})
+
+
+test_that("Species-gene modifications work, KEGG", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file1", V2:="test_gg.txt"]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="netAdd", V2:="test_netAdd_species_genes_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_gg_addSpecGenes")
 })
 
 test_that("Gene modifications work, KEGG", {
-
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file1", V2:="test_gg.txt"]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="netAdd", V2:="test_netAdd_genes_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_gg_addGenes")
 })
 
 test_that("Rxn modifications work, KEGG", {
-
-})
-
-test_that("Gene modifications work, AGORA", {
-
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file1", V2:="test_gg.txt"]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_gg_addRxns")
 })
 
 test_that("Rxn modifications work, AGORA", {
-
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file1", V2:="test_seqs.txt"]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
+  config1[V1=="database", V2:=get_text("database_choices")[1]]
+  config1[V1=="netAdd", V2:="test_netAdd_rxns_AGORA.txt"]
+  test_results_normal(config1, file_prefix = "test_agora_addRxns")
 })
 
-test_that("PICRUSt models are complete", {
-
+test_that("Gene modifications work, AGORA", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file1", V2:="test_seqs.txt"]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
+  config1[V1=="database", V2:=get_text("database_choices")[1]]
+  config1[V1=="netAdd", V2:="test_netAdd_genes_AGORA.txt"]
+  test_results_normal(config1, file_prefix = "test_agora_addGenes")
 })
 
-test_that("AGORA genomes and models are complete", {
 
+
+test_that("species-gene modifications work, AGORA", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file1", V2:="test_seqs.txt"]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
+  config1[V1=="database", V2:=get_text("database_choices")[1]]
+  config1[V1=="netAdd", V2:="test_netAdd_species_genes_AGORA.txt"]
+  test_results_normal(config1, file_prefix = "test_agora_addSpecGenes")
 })
 
-test_that("Duplicate AGORA-KEGG compound mappings", {
-
-})
-
-test_that("Duplicate seq-AGORA species mappings", {
-
-})
-
-test_that("External-internal metabolites handled as expected", {
-
-})
-
-test_that("Network generation correctly removed generic pathway reactions", {
-  expect_equal(nrow(rxn_table[Path==" 01100"]), 0)
-  expect_equal(nrow(rxn_table[Path=="01100"]), 0)
-  expect_equal(nrow(rxn_table[Path==1100]), 0)
-  expect_equal(nrow(rxn_table[grepl("01100", Path)]), 0)
-})
-
-test_that("Network data looks normal", {
-  #expect_gt(nrow(get_kegg_reaction_info("KEGGREST", kolist = datasets[[1]][,KO])),1)
-  expect_equal(names(all_kegg), c("KOs", "Reactions", "Reaction_info", "kos_to_rxns"))
-  expect_lte(rxn_table[,length(unique(KO))], datasets[[1]][,length(KO)])
-  expect_gt(rxn_table[,length(unique(KO))], 0)
-  expect_equal(names(rxn_table), c("Rxn", "KO", "Reac", "Prod", "Path", "ReacProd", "stoichReac", "stoichProd"))
-})
-
-ko_net = generate_genomic_network(datasets[[1]][,KO], keggSource = "KeggTemplate", rxn_table = rxn_table)
-ko_net2 = generate_genomic_network(datasets[[1]][,KO], keggSource = "KeggTemplate", rxn_table = rxn_table, normalize = F)
-
-test_that("Networks generated successfully", {
-  expect_length(ko_net, 3)
-  expect_equal(names(ko_net[[3]]), c("KO", "Reac", "Prod", "stoichReac", "stoichProd"))
-  expect_equal(sort(unique(names(ko_net[[1]]))), sort(unique(ko_net[[3]][,KO])))
-  expect_equal(sort(unique(row.names(ko_net[[1]]))), sort(unique(c(ko_net[[3]][,Prod], ko_net[[3]][,Reac]))))
-  expect_length(ko_net2, 3)
-  expect_equal(names(ko_net2[[3]]), c("KO", "Reac", "Prod", "stoichReac", "stoichProd"))
-  expect_equal(sort(unique(names(ko_net2[[1]]))), sort(unique(ko_net2[[3]][,KO])))
-  expect_equal(sort(unique(row.names(ko_net2[[1]]))), sort(unique(c(ko_net2[[3]][,Prod], ko_net2[[3]][,Reac]))))
-})
-
-cmp_scores = get_cmp_scores(ko_net[[1]], datasets[[1]])
-cmp_scores2 = get_cmp_scores(ko_net2[[1]], datasets[[1]])
-
-test_that("CMP scores can be calculated from network", {
-  expect_gt(nrow(cmp_scores), 0)
-  expect_equal(ncol(cmp_scores), ncol(datasets[[1]]))
-  expect_gt(nrow(cmp_scores2), 0)
-  expect_equal(ncol(cmp_scores2), ncol(datasets[[1]]))
-})
-
-shared_mets = intersect(datasets[[2]][,KEGG], cmp_scores[,compound])
-met_mat = make_pairwise_met_matrix(metabolite = shared_mets[1], met_mat = datasets[[2]])
-met_mat2 = make_pairwise_met_matrix(shared_mets[1], cmp_scores)
-met_mat_a = make_pairwise_met_matrix(shared_mets[2], datasets[[2]])
-met_mat_2a = make_pairwise_met_matrix(shared_mets[2], cmp_scores)
-
-test_that("Cmp scores can be compared with mets", {
-  expect_gt(nrow(met_mat), 0)
-  expect_equal(nrow(met_mat), ncol(met_mat))
-  expect_equal(nrow(met_mat2), ncol(met_mat2))
-  expect_equal(nrow(met_mat), nrow(met_mat2))
-  expect_error(mantel_2sided(met_mat, met_mat2, permutations = 500, direction = "pos", method = "spearman"))
-  expect_silent(mantel_2sided(met_mat_a, met_mat_2a, permutations = 500, direction = "pos", method = "spearman"))
-})
-
-run_all_metabolites(datasets[[1]], datasets[[2]], file_prefix = "test", id_met = F,
-                    net_method = "KeggTemplate", net_file = net_file, rxn_table_source = rxn_table,
-                    correction = "fdr", degree_filter = 30, cor_method = "spearman", nperm = 200, nonzero_filter = 4)
-load("test_out.rda")
-
-test_that("Run all metabolites function works", {
-  #expect_equal(length(all_comparisons), length(shared_mets))
-  expect_equal(nrow(node_data), length(all_comparisons))
-})
-
-spec_contribs = get_spec_contribs(test_contrib_file, data_dir = getwd(), results_file = "test_out.rda", out_prefix = "test", otu_id = "all", valueVar = "singleMusicc",
-                                  sum_to_genus = T, write_out = T, taxonomy_file = "test_taxonomy.txt")
-spec_contribs2 = get_spec_contribs(test_contrib_file, data_dir = getwd(), results_file = "test_out.rda", out_prefix = "test", otu_id = "all", valueVar = "RelAbundSample", sum_to_genus = T, write_out = T, taxonomy_file = "test_taxonomy.txt")
 
 
-test_that("Species contributions work", {
-  expect_gt(nrow(spec_contribs), 0)
-  expect_gt(nrow(spec_contribs[!is.na(Cor)]), 0)
-  expect_gt(nrow(spec_contribs2), 0)
-  expect_gt(nrow(spec_contribs2[!is.na(Cor)]), 0)
-})
+
+

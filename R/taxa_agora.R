@@ -11,7 +11,7 @@
 #' @examples
 #' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", simThreshold = 0.99)
 #' @export
-build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_path = "~/Documents/MIMOSA2shiny/data/AGORA/"){
+build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_path = "data/AGORA/"){
   #Now load AGORA models
   if(usePreprocessed == F){
     agora_mods = load_agora_models(mod_list, agora_path = agora_path) #This takes a long time
@@ -377,7 +377,7 @@ kegg_agora_mets = function(kegg_ids){
 get_compound_format = function(comp_list){
   num_match_kegg = kegg_mapping[,sum(comp_list %in% KEGG)]
   num_match_agora = kegg_mapping[,sum(comp_list %in% met)]
-  if(num_match_kegg < 2 & num_match_agora < 2) stop("Metabolites do not appear to be in either KEGG or COBRA format")
+  if(num_match_kegg < 2 & num_match_agora < 2) return("Metabolites do not appear to be in either KEGG or COBRA format")
   if(num_match_kegg > num_match_agora) return("KEGG") else return("Cobra")
 }
 

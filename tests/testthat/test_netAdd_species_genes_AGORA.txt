@@ -1,0 +1,4 @@
+KO	Species	remove
+3MOBS	Akkermansia_muciniphila_ATCC_BAA_835	
+3OAACPR1	Akkermansia_muciniphila_ATCC_BAA_835	1
+foo	Akkermansia_muciniphila_ATCC_BAA_835	1

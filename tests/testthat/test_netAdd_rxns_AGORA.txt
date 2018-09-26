@@ -1,0 +1,11 @@
+Prod	Reac	KO	stoichReac	stoichProd	remove
+3mob[c]	3c3hmp[c]	3MOBS	1	1	
+3mob[c]	coa[c]	3MOBS	1	1	
+3mob[c]	h[c]	3MOBS	1	1	
+accoa[c]	3c3hmp[c]	3MOBS	1	1	
+accoa[c]	coa[c]	3MOBS	1	1	
+accoa[c]	h[c]	3MOBS	1	1	
+h2o[c]	3c3hmp[c]	3MOBS	1	1	
+h2o[c]	coa[c]	3MOBS	1	1	
+h2o[c]	h[c]	3MOBS	1	1	
+3hgACPm[c]	3ogACPm[c]	3OAACPR1	1	1	1

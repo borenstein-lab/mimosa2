@@ -268,17 +268,17 @@ build_metabolic_model = function(species, config_table, netAdd = NULL){
   } else stop('Invalid model format specified')
   if(config_table[V1=="database", V2!=get_text("database_choices")[4]]){
     species = species[OTU %in% network[,OTU]]
-  } 
-  if(config_table[V1=="netAdd", !is.null(V2)]){
+  }
+  if(config_table[V1=="netAdd", length(V2) != 0]){
     if(config_table[V1=="netAdd", V2!=F]){
       netAdd = fread(config_table[V1=="netAdd", V2])
       network = add_to_network(network, netAdd, data_path = config_table[V1=="data_prefix", V2], kegg_path = config_table[V1=="kegg_prefix", V2])
     }
   }
-  if(config_table[V1=="gapfill", V2 != F]){
-    #Do stuff
-  }
-  network = network[OTU %in% species[,OTU]]
+  # if(config_table[V1=="gapfill", V2 != F]){
+  #   #Do stuff
+  # }
+  if(config_table[V1=="database", V2!=get_text("database_choices")[4]]) network = network[OTU %in% species[,OTU]]
   network = filter_currency_metabolites(network, degree_filter = 30)
   return(list(network, species))
 }
@@ -337,7 +337,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     #separate internal/external?
     setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
   }
-  
+
   return(spec_cmps)
 }
 
@@ -359,7 +359,7 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T){
   #network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
   #network[,stoichProd:=stoichProd*normalized_copy_number]
   ko_table_melt = melt(ko_table, id.var = "KO", variable.name = "Sample")
-  ko_table[,Sample:=as.character(Sample)]
+  ko_table_melt[,Sample:=as.character(Sample)]
   if(relAbund){
     ko_table_melt[,value:=as.double(value)]
     ko_table_melt[,value:=value/sum(value)*100, by=Sample]
@@ -511,7 +511,7 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
 }
 
 #' Check configuration table formatting
-#' 
+#'
 #' @import data.table
 #' @param config_table Table of settings for MIMOSA analysis
 #' @param data_path Path to MIMOSA2shiny data files
@@ -649,12 +649,12 @@ map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCB
 }
 
 #' Convert metabolite name table to KEGG metabolite table
-#' 
+#'
 #' @import MetaboAnalystR
 #' @import data.table
 #' @param met_table Table of metabolite abundances
 #' @return A new table of metabolite abundances using KEGG compound IDs
-#' @examples 
+#' @examples
 #' new_mets = map_to_kegg(mets)
 #' @export
 map_to_kegg = function(met_table){

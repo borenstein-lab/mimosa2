@@ -209,7 +209,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL){
     seq_list = species[,OTU]
     if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
     if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]) { ## Greengenes
-      seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99) #Run vsearch to get gg OTUs
+      seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch")) #Run vsearch to get gg OTUs
       species[,seqID:=paste0("seq", 1:nrow(species))]
       samps = names(species)[!names(species) %in% c("OTU", "seqID")]
       new_species = merge(species, seq_results, by = "seqID", all.x=T)
@@ -219,7 +219,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL){
       species = new_species
       mod_list = species[,OTU]
     } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
-      seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "blastDB/"), repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)], add_agora_names = T)
+      seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "blastDB/"), repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)], add_agora_names = T, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
       species[,seqID:=paste0("seq", 1:nrow(species))]
       samps = names(species)[!names(species) %in% c("OTU", "seqID")]
       new_species = merge(species, seq_results, by = "seqID", all.x=T)

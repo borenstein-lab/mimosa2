@@ -4,12 +4,14 @@
 \alias{check_config_table}
 \title{Check configuration table formatting}
 \usage{
-check_config_table(config_table, data_path = "data/")
+check_config_table(config_table, data_path = "data/", app = F)
 }
 \arguments{
 \item{config_table}{Table of settings for MIMOSA analysis}
 
 \item{data_path}{Path to MIMOSA2shiny data files}
+
+\item{app}{Whether this is being called by the MIMOSA web app}
 }
 \value{
 Cleaned-up configuration table

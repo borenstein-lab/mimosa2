@@ -19,23 +19,29 @@ test_results_normal = function(config_table, file_prefix){
   mets = data_inputs$mets
   expect_gt(nrow(species), 0)
   expect_gt(nrow(mets), 0)
-  expect_true("OTU" %in% names(species))
+  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_true("OTU" %in% names(species))
   expect_true("compound" %in% names(mets))
   if(config_table[V1=="metType", V2!=get_text("met_type_choices")[2]]) expect_equal(get_compound_format(mets[,compound]), "KEGG")
-  expect_equal(nrow(species[is.na(OTU)]), 0)
+  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_equal(nrow(species[is.na(OTU)]), 0) else {
+    expect_equal(nrow(species[is.na(KO)]), 0)
+  }
   expect_equal(nrow(mets[is.na(compound)]), 0)
   network_results = build_metabolic_model(species, config_table)
   network = network_results[[1]]
   species = network_results[[2]]
-  expect_true("OTU" %in% names(species))
+  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_true("OTU" %in% names(species))
   expect_gt(nrow(species), 0)
-  expect_true(all(c("OTU", "KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(network)))
-  expect_setequal(network[,unique(as.character(OTU))], species[,as.character(OTU)])
+  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) {
+    expect_true(all(c("OTU", "KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(network)))
+  } else {
+    expect_true(all(c("KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(network)))
+  }
+  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_setequal(network[,unique(as.character(OTU))], species[,as.character(OTU)])
   expect_known_output(network, file = paste0(file_prefix, "_net.rda"))
   if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
     metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table)
     expect_equal(metagenome_network[,unique(OTU)], "TotalMetagenome")
-    expect_true(all(c("OTU", "KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(metagenome_network)))
+    expect_true(all(c("KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(metagenome_network)))
   }
   if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
     expect_warning(map_to_kegg(mets))
@@ -182,6 +188,15 @@ test_that("species-gene modifications work, AGORA", {
 })
 
 
-
+test_that("Metagenome option works", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="database", V2:=get_text("database_choices")[4]]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1 = config1[V1 != "file1"]
+  config1 = rbind(config1, data.table(V1="metagenome", V2 = "test_metagenome.txt"))
+  config1[V1=="file2", V2:="test_metagenome_mets.txt"]
+  config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_metagenome")
+})
 
 

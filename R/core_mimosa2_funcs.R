@@ -463,9 +463,10 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
   } else {
     stop("Invalid format for reaction addition table")
   }
-  if(!"OTU" %in% table_type){
+  if(!"OTU" %in% table_type){  #No species netAdd
     ## Do removals first
     if("remove" %in% table_type){
+      print("removing here")
       removeTable = addTable[remove == T]
       addTable = addTable[remove == F|is.na(remove)]
       addTable[,remove:=NULL]
@@ -478,14 +479,16 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
       }
     }
     #Now add in rxns for all species
-    all_spec = network[,unique(OTU)]
-    new_net = data.table()
-    for(spec in all_spec){ #Propagate to all species
-      new_net1 = copy(addTable)
-      new_net1[,OTU:=spec]
-      new_net = rbind(new_net, new_net1)
+    if("OTU" %in% names(network)){ #IF it's not a metagenome network
+      all_spec = network[,unique(OTU)]
+      new_net = data.table()
+      for(spec in all_spec){ #Propagate to all species
+        new_net1 = copy(addTable)
+        new_net1[,OTU:=spec]
+        new_net = rbind(new_net, new_net1)
+      }
+      addTable = new_net
     }
-    addTable = new_net
   } else if("remove" %in% table_type){
     #Do species-specific removals
     removeTable = addTable[remove == T]
@@ -501,8 +504,10 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
       }
     }
   }
-  network[,OTU:=as.character(OTU)]
-  addTable[,OTU:=as.character(OTU)]
+  if("OTU" %in% names(network)){
+    network[,OTU:=as.character(OTU)]
+    addTable[,OTU:=as.character(OTU)]
+  }
   network = rbind(network, addTable, fill = T)
   ## Remove duplicates
   setkey(network, NULL)
@@ -515,12 +520,20 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
 #' @import data.table
 #' @param config_table Table of settings for MIMOSA analysis
 #' @param data_path Path to MIMOSA2shiny data files
+#' @param app Whether this is being called by the MIMOSA web app
 #' @return Cleaned-up configuration table
 #' @examples
 #' check_config_table(table1)
 #' @export
-check_config_table = function(config_table, data_path = "data/"){
-  req_params = c("file1", "file2", "database", "genomeChoices")
+check_config_table = function(config_table, data_path = "data/", app = F){
+  if(app){
+    req_params = c("database", "genomeChoices")
+  } else {
+    req_params = c("file1", "file2", "database", "genomeChoices")
+    if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+      req_params[req_params=="file1"] = "metagenome"
+    }
+  }
   if(any(!req_params %in% config_table[,V1])) stop("Required parameters missing from configuration file")
   all_params = c(req_params, "metagenome","contribType", "gapfill", "metType", "netAdd", "simThreshold", "kegg_prefix", "data_prefix") #Move to package sysdata?
   config_table[V2=="", V2:=FALSE]

@@ -101,7 +101,7 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
   ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_viridis(option = "plasma", discrete = T) + geom_abline(intercept = 0, slope = 0, linetype = 2) +
     theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=8), axis.text.y = element_blank(), legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches")) +
     ylab("Contribution to variance") + xlab("Taxon") +  coord_flip() + ggtitle(metabolite)#
-
+  
 }
 
 #' Plot summary of metabolite-species contributions
@@ -121,7 +121,7 @@ plot_summary_contributions = function(varShares, include_zeros = T){
   spec_order = varShares[Species != "Residual",length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = T), Species]
   spec_order = c(spec_order, "Residual")
   varShares[,Species:=factor(Species, levels = spec_order)]
-
+  
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
   }
@@ -223,21 +223,21 @@ build_metabolic_model = function(species, config_table, netAdd = NULL){
       species[,seqID:=paste0("seq", 1:nrow(species))]
       samps = names(species)[!names(species) %in% c("OTU", "seqID")]
       new_species = merge(species, seq_results, by = "seqID", all.x=T)
-      new_species = new_species[,lapply(.SD, sum), by=AGORA_ID, .SDcols = samps]
-      new_species[is.na(AGORA_ID), AGORA_ID:="Other"]
-      setnames(new_species, "AGORA_ID", "OTU")
-      mod_list = seq_results[,unique(AGORA_ID)]
+      new_species = new_species[,lapply(.SD, sum), by=dbID, .SDcols = samps]
+      new_species[is.na(dbID), dbID:="Other"]
+      setnames(new_species, "dbID", "OTU")
+      mod_list = seq_results[,unique(dbID)]
       species = new_species
-
+      
       # if(database != get_text("database_choices")[1]){
       #   seq_results = get_agora_from_otus(species_dat[,OTU], database = database)
       # } else {
       # }
       ### Convert species abundances to AGORA species IDs
-
+      
     }  else stop("Model source option not found")
   } else if(config_table[V1=="database", V2==get_text("database_choices")[2]]){ ## GG OTUs
-      #Nothing to do
+    #Nothing to do
     if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
       mod_list = species[,OTU]
     } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
@@ -337,7 +337,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     #separate internal/external?
     setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
   }
-
+  
   return(spec_cmps)
 }
 
@@ -559,7 +559,7 @@ run_mimosa2 = function(config_table){
   data_inputs = read_mimosa2_files(file_list, config_table, app = F)
   species = data_inputs$species
   mets = data_inputs$mets
-
+  
   network_results = build_metabolic_model(species, config_table)
   network = network_results[[1]]
   species = network_results[[2]]
@@ -572,9 +572,9 @@ run_mimosa2 = function(config_table){
     # metagenome_network = metagenome_data[[2]]
     #Metagenome data
   }
-
+  
   if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
-      mets = map_to_kegg(mets)
+    mets = map_to_kegg(mets)
   }
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
@@ -597,7 +597,7 @@ run_mimosa2 = function(config_table){
   #Order dataset for plotting
   #met_order = var_shares[Species=="Residual"][order(VarShare, increasing = T), metID]
   #var_shares[,metID:=factor(metID, levels = metID)]
-
+  
 }
 
 #' Assign seq vars to OTUs or AGORA models using vsearch
@@ -619,7 +619,7 @@ run_mimosa2 = function(config_table){
 #' map_seqvar(seqs)
 #' @export
 map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", vsearch_path = "vsearch",
-                                file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T, otu_tab = F){
+                      file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T, otu_tab = F){
   file_prefix = paste0(file_prefix, randomString())
   seqList = DNAStringSet(seqs)
   names(seqList) = paste0("seq", 1:length(seqList))
@@ -647,8 +647,9 @@ map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCB
       seq_matches = results
     }
     if(add_agora_names){
-      seq_data = fread(paste0(repSeqDir, "agora_NCBItax_processed_nodups.txt"))
-      seq_matches = merge(seq_matches, seq_data, by.x = "dbID", by.y = "databaseID", all.x = T)
+      #seq_data = fread(paste0(repSeqDir, "agora_NCBItax_processed_nodups.txt"))
+      seq_data = fread(paste0(repSeqDir, "AGORA_full_genome_info.txt"))
+      seq_matches = merge(seq_matches, seq_data, by.x = "dbID", by.y = "ModelAGORA", all.x = T)
     }
     if(otu_tab){
       otu_table = fread(paste0(repSeqDir, file_prefix, "otu_tab.txt"))

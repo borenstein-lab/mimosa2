@@ -85,6 +85,8 @@ calculate_var_shares = function(species_contribution_table, valueVar = "newValue
   return(var_shares)
 }
 
+getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+
 #' Plot species contributions for a single metabolite
 #'
 #' @import ggplot2
@@ -98,8 +100,16 @@ calculate_var_shares = function(species_contribution_table, valueVar = "newValue
 plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F){
   plot_dat = varShares[get(metIDcol)==metabolite]
   if(!include_zeros) plot_dat = plot_dat[VarShare != 0]
-  ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_viridis(option = "plasma", discrete = T) + geom_abline(intercept = 0, slope = 0, linetype = 2) +
-    theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=8), axis.text.y = element_blank(), legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches")) +
+  color_pals = c( "black", sample(getPalette(plot_dat[,length(unique(Species))-1])))
+  spec_order = plot_dat[Species != "Residual"][order(abs(VarShare), decreasing = T), as.character(Species)]
+  spec_order = c("Residual", spec_order)
+  print(spec_order)
+  plot_dat[,Species:=factor(Species, levels = spec_order)]
+  print(plot_dat)
+  ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_manual(values = color_pals) + geom_abline(intercept = 0, slope = 0, linetype = 2) +
+    theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=8), axis.text.y = element_blank(),
+          legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), legend.text = element_text(size=6),
+          panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches"), legend.position = "bottom", legend.key.size = unit(0.1, "inches")) + guides(fill = guide_legend(ncol = 2)) +
     ylab("Contribution to variance") + xlab("Taxon") +  coord_flip() + ggtitle(metabolite)#
   
 }
@@ -115,19 +125,20 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
 #' plot_summary_contributions(varShares)
 #' @export
 plot_summary_contributions = function(varShares, include_zeros = T){
+  if(!include_zeros){
+    varShares = varShares[VarShare != 0]
+  }
   varShares[,metID:=met_names(as.character(compound))]
   met_order = varShares[Species=="Residual"][order(VarShare, decreasing = F), metID]
   varShares[,metID:=factor(metID, levels = met_order)]
   spec_order = varShares[Species != "Residual",length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = T), Species]
-  spec_order = c(spec_order, "Residual")
-  varShares[,Species:=factor(Species, levels = spec_order)]
-  
-  if(!include_zeros){
-    varShares = varShares[VarShare != 0]
-  }
-  plot1 = ggplot(varShares, aes(x=metID, y = as.character(Species), fill = VarShare)) + geom_tile() + theme_minimal() +
-    theme(axis.text.x = element_text(angle=90, hjust=1, vjust =0.5), axis.line = element_blank()) +
-    scale_fill_gradient(low = brewer.pal(9,"Blues")[1], high = brewer.pal(9, "Blues")[9]) + xlab("Metabolite") + ylab("Taxon")
+  spec_order = c("Residual", spec_order)
+  varShares[,Species2:=factor(as.character(Species), levels = spec_order)]
+
+  plot1 = ggplot(varShares, aes(x=metID, y = Species2, fill = VarShare)) + geom_tile() + theme_minimal() +
+    theme(axis.text.x = element_text(angle=90, hjust=1, vjust =0.5), axis.line = element_blank(), legend.position = "bottom") +
+    scale_fill_gradient2(low = brewer.pal(9,"Reds")[9], mid = "grey90", high = brewer.pal(9, "Blues")[9], name = "Contribution to variance") +
+    xlab("Metabolite") + ylab("Taxon")
   return(plot1)
 }
 

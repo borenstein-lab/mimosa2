@@ -118,28 +118,42 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
 #'
 #' @import ggplot2
 #' @import RColorBrewer
+#' @import cowplot
 #' @param varShares Dataset of contributions
 #' @param include_zeros Whether to plot taxa that do not have any contribution
+#' @param remove_resid_rescale Whether to remove the residual and rescale contributions
 #' @return plot of contributions
 #' @examples
 #' plot_summary_contributions(varShares)
 #' @export
-plot_summary_contributions = function(varShares, include_zeros = T){
+plot_summary_contributions = function(varShares, include_zeros = T, remove_resid_rescale = F){
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
   }
   varShares[,metID:=met_names(as.character(compound))]
   met_order = varShares[Species=="Residual"][order(VarShare, decreasing = F), metID]
   varShares[,metID:=factor(metID, levels = met_order)]
-  spec_order = varShares[Species != "Residual",length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = T), Species]
-  spec_order = c("Residual", spec_order)
+  resid_dat = varShares[Species == "Residual"]
+  varShares = varShares[Species != "Residual"]
+  spec_order = varShares[,length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = T), Species]
   varShares[,Species2:=factor(as.character(Species), levels = spec_order)]
-
-  plot1 = ggplot(varShares, aes(x=metID, y = Species2, fill = VarShare)) + geom_tile() + theme_minimal() +
-    theme(axis.text.x = element_text(angle=90, hjust=1, vjust =0.5), axis.line = element_blank(), legend.position = "bottom") +
-    scale_fill_gradient2(low = brewer.pal(9,"Reds")[9], mid = "grey90", high = brewer.pal(9, "Blues")[9], name = "Contribution to variance") +
-    xlab("Metabolite") + ylab("Taxon")
-  return(plot1)
+  if(remove_resid_rescale){
+    varShares[,VarShareNoResid:=VarShare/sum(VarShare), by=metID]
+    plot_var = "VarShareNoResid"
+    color_lab = "Scaled contribution to variance"
+  } else {
+    plot_var = "VarShare"
+    color_lab = "Contribution to variance"
+  }
+  resid_plot = ggplot(resid_dat, aes(x=metID, y = 1-VarShare)) + geom_bar(stat = "identity") + scale_y_continuous(expand = c(0,0))+ theme_minimal() +
+    theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared")
+  plot1 = ggplot(varShares, aes(x=metID, y = Species2)) + geom_tile(aes_string(fill = plot_var)) + theme_minimal() +
+    theme(axis.text.x = element_blank(), axis.line = element_blank(), legend.position = "bottom") +
+    scale_fill_gradientn(colours = c(brewer.pal(9,"Reds")[9], brewer.pal(9,"Reds")[8], "white",  brewer.pal(9, "Blues")[8],  brewer.pal(9, "Blues")[9]), 
+                         values = scales::rescale(c(-170, -2, 0, 2, 100)), name = color_lab)  + ylab("Taxon")+
+    xlab("Metabolite")
+  plot_all = plot_grid(resid_plot, plot1, nrow = 2, align = "v", axis = "lr", rel_heights = c(1, 2.5))
+  return(plot_all)
 }
 
 #' Read in files for a MIMOSA 2 analysis
@@ -214,71 +228,76 @@ read_mimosa2_files = function(file_list, configTable, app = T){
 #' @examples
 #' build_metabolic_model(config_table)
 #' @export
-build_metabolic_model = function(species, config_table, netAdd = NULL){
+build_metabolic_model = function(species, config_table, netAdd = NULL, manual_agora = F){
   ### Get species to use for network if starting from seq vars
-  if(config_table[V1=="database", V2==get_text("database_choices")[1]]){ ### Sequence variatns
-    seq_list = species[,OTU]
-    if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
-    if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]) { ## Greengenes
-      seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch")) #Run vsearch to get gg OTUs
-      species[,seqID:=paste0("seq", 1:nrow(species))]
-      samps = names(species)[!names(species) %in% c("OTU", "seqID")]
-      new_species = merge(species, seq_results, by = "seqID", all.x=T)
-      new_species = new_species[,lapply(.SD, sum), by=dbID, .SDcols = samps]
-      setnames(new_species, "dbID", "OTU")
-      new_species[is.na(OTU), OTU:=0] #Unassigned
-      species = new_species
-      mod_list = species[,OTU]
-    } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
-      seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "blastDB/"), repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)], add_agora_names = T, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
-      species[,seqID:=paste0("seq", 1:nrow(species))]
-      samps = names(species)[!names(species) %in% c("OTU", "seqID")]
-      new_species = merge(species, seq_results, by = "seqID", all.x=T)
-      new_species = new_species[,lapply(.SD, sum), by=dbID, .SDcols = samps]
-      new_species[is.na(dbID), dbID:="Other"]
-      setnames(new_species, "dbID", "OTU")
-      mod_list = seq_results[,unique(dbID)]
-      species = new_species
-      
-      # if(database != get_text("database_choices")[1]){
-      #   seq_results = get_agora_from_otus(species_dat[,OTU], database = database)
-      # } else {
-      # }
-      ### Convert species abundances to AGORA species IDs
-      
-    }  else stop("Model source option not found")
-  } else if(config_table[V1=="database", V2==get_text("database_choices")[2]]){ ## GG OTUs
-    #Nothing to do
+  if(!manual_agora){
+    if(config_table[V1=="database", V2==get_text("database_choices")[1]]){ ### Sequence variatns
+      seq_list = species[,OTU]
+      if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
+      if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]) { ## Greengenes
+        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch")) #Run vsearch to get gg OTUs
+        species[,seqID:=paste0("seq", 1:nrow(species))]
+        samps = names(species)[!names(species) %in% c("OTU", "seqID")]
+        new_species = merge(species, seq_results, by = "seqID", all.x=T)
+        new_species = new_species[,lapply(.SD, sum), by=dbID, .SDcols = samps]
+        setnames(new_species, "dbID", "OTU")
+        new_species[is.na(OTU), OTU:=0] #Unassigned
+        species = new_species
+        mod_list = species[,OTU]
+      } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
+        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "blastDB/"), repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)], add_agora_names = T, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
+        species[,seqID:=paste0("seq", 1:nrow(species))]
+        samps = names(species)[!names(species) %in% c("OTU", "seqID")]
+        new_species = merge(species, seq_results, by = "seqID", all.x=T)
+        new_species = new_species[,lapply(.SD, sum), by=dbID, .SDcols = samps]
+        new_species[is.na(dbID), dbID:="Other"]
+        setnames(new_species, "dbID", "OTU")
+        mod_list = seq_results[,unique(dbID)]
+        species = new_species
+        
+        # if(database != get_text("database_choices")[1]){
+        #   seq_results = get_agora_from_otus(species_dat[,OTU], database = database)
+        # } else {
+        # }
+        ### Convert species abundances to AGORA species IDs
+        
+      }  else stop("Model source option not found")
+    } else if(config_table[V1=="database", V2==get_text("database_choices")[2]]){ ## GG OTUs
+      #Nothing to do
+      if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
+        mod_list = species[,OTU]
+      } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
+        species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toAGORA_97_map.txt"))
+        mod_list = species[!is.na(OTU),OTU]
+      } else stop('Model option not implemented')
+    } else if(config_table[V1=="database", V2==get_text("database_choices")[3]]){ # SILVA
+      if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ # AGORA
+        species = otus_to_agora(species, "SILVA", silva_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99_toAGORA_97_map.txt"))
+        mod_list = species[!is.na(OTU), OTU]
+      } else stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
+    }
+    ### Now build network from mod_list
     if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
-      mod_list = species[,OTU]
-    } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
-      species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toAGORA_97_map.txt"))
-      mod_list = species[!is.na(OTU),OTU]
-    } else stop('Model option not implemented')
-  } else if(config_table[V1=="database", V2==get_text("database_choices")[3]]){ # SILVA
-    if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ # AGORA
-      species = otus_to_agora(species, "SILVA", silva_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99_toAGORA_97_map.txt"))
-      mod_list = species[!is.na(OTU), OTU]
-    } else stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
-  }
-  ### Now build network from mod_list
-  if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
-    if(config_table[V1=="database", !V2 %in% get_text("database_choices")[c(1, 2, 4)]]){
-      stop("Only Greengenes currently implemented")
+      if(config_table[V1=="database", !V2 %in% get_text("database_choices")[c(1, 2, 4)]]){
+        stop("Only Greengenes currently implemented")
+      }
+      if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+        #Get network from metagenome KOs
+        species = species[rowSums(species[,names(species) != "KO", with=F]) != 0]
+        network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
+        network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
+      } else { ##database_choices 1 or 3
+        network = get_kegg_network(mod_list, net_path = paste0(config_table[V1=="data_prefix", V2], "picrustGenomeData/indivModels/"))
+      }
+    } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ #AGORA
+      network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "AGORA/"))
+    } else stop('Invalid model format specified')
+    if(config_table[V1=="database", V2!=get_text("database_choices")[4]]){
+      species = species[OTU %in% network[,OTU]]
     }
-    if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
-      #Get network from metagenome KOs
-      species = species[rowSums(species[,names(species) != "KO", with=F]) != 0]
-      network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
-      network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
-    } else { ##database_choices 1 or 3
-      network = get_kegg_network(mod_list, net_path = paste0(config_table[V1=="data_prefix", V2], "picrustGenomeData/indivModels/"))
-    }
-  } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ #AGORA
+  } else { ##Option for simulation data
+    mod_list = species[,unique(OTU)]
     network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "AGORA/"))
-  } else stop('Invalid model format specified')
-  if(config_table[V1=="database", V2!=get_text("database_choices")[4]]){
-    species = species[OTU %in% network[,OTU]]
   }
   if(config_table[V1=="netAdd", length(V2) != 0]){
     if(config_table[V1=="netAdd", V2!=F]){
@@ -304,7 +323,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL){
 #' @examples
 #' get_species_cmp_scores(species_data, network)
 #' @export
-get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T){
+get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F){
   network[is.na(stoichReac), stoichReac:=0] #solve NA problem
   network[is.na(stoichProd), stoichProd:=0]
   network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
@@ -340,7 +359,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
   spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound)]
   setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))
   all_comps = spec_cmps[,unique(compound)]
-  if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2){ #If compounds are not KEGG IDs
+  if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
     #Convert AGORA IDs to KEGG IDs
     spec_cmps[,KEGG:=agora_kegg_mets(compound)]
     spec_cmps = spec_cmps[!is.na(KEGG)]

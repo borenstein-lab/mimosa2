@@ -4,7 +4,8 @@
 \alias{build_metabolic_model}
 \title{Build species-specific metabolic model for MIMOSA2 analysis}
 \usage{
-build_metabolic_model(species, config_table, netAdd = NULL)
+build_metabolic_model(species, config_table, netAdd = NULL,
+  manual_agora = F)
 }
 \arguments{
 \item{species}{Table of species/taxon abundances}

@@ -68,7 +68,9 @@ process_metabolite_summary = function(node_data, thresholds, ko_summary){
   node_data[CompoundName=="Serotonin", SuperPath:="Amino acid"]
   node_data[CompoundName=="alpha,alpha-Trehalose", SuperPath:="Carbohydrate"]
   met_order = node_data[order(Correlation, decreasing = F),Metabolite]
-  node_data[,Metabolite:=factor(Metabolite, levels = met_order)]
+  if(length(duplicated(met_order))==0){
+    node_data[,Metabolite:=factor(Metabolite, levels = met_order)]
+  }
   return(node_data)
 }
 
@@ -88,8 +90,8 @@ add_metadata_to_metabolite_summary = function(node_data, mets, metadata, metadat
   bad_mets = mets[!is.na(value), length(Sample),by=c("KEGG",metadata_var)]
   missing_mets = bad_mets[,length(unique(get(metadata_var))), by=KEGG]
   bad_mets = c(bad_mets[V1 < 3, unique(KEGG)], missing_mets[V1 < 2, KEGG])
-  mets_summary = mets[!is.na(value) & !KEGG %in% bad_mets,list(mean(value[get(metadata_var)==1])-mean(value[get(metadata_var)==0]),wilcox.test(value[get(metadata_var)==1],value[get(metadata_var)==0])$p.value),by=KEGG]
-  setnames(mets_summary, c("V1", "V2"), c("MetDiff", "MetPVal"))
+  mets_summary = mets[!is.na(value) & !KEGG %in% bad_mets,list(mean(value[get(metadata_var)==1])-mean(value[get(metadata_var)==0]), (mean(value[get(metadata_var)==1])-mean(value[get(metadata_var)==0]))/abs(mean(value[get(metadata_var)==0])), wilcox.test(value[get(metadata_var)==1],value[get(metadata_var)==0])$p.value),by=KEGG]
+  setnames(mets_summary, c("V1", "V2", "V3"), c("MetDiff", "MetPercDiff", "MetPVal"))
   node_data = merge(node_data, mets_summary, by.x = "compound", by.y = "KEGG", all.x = T, all.y = F)
   node_data[,Enriched:=ifelse(MetDiff > 0 & MetPVal < 0.1,1,0)]
   node_data[,Depleted:=ifelse(MetDiff < 0 & MetPVal < 0.1,1,0)]
@@ -130,7 +132,7 @@ make_metabolite_species_contribution_table = function(species_data, node_data, t
 #' process_gene_contribs(gene_contribs, node_data)
 #' @export
 process_gene_contribs = function(geneContribs, node_data){
-  geneContribs = merge(geneContribs, node_data, by = "compound", all.x = T)
+  geneContribs = merge(geneContribs, node_data, by = "compound", all.x = T, allow.cartesian = T)
   geneContribs[,Contrib:=ifelse(is.na(Cor)|Cor < 0.5, 1, 0)]
   noContribs = geneContribs[,sum(Contrib),by=compound][V1==0,compound]
   geneContribs[compound %in% noContribs, Contrib:=2] #Mark contributors of compounds with no notable ones

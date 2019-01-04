@@ -84,6 +84,7 @@ process_metabolite_summary = function(node_data, thresholds, ko_summary){
 #' @export
 add_metadata_to_metabolite_summary = function(node_data, mets, metadata, metadata_var){
   mets = merge(mets, metadata[,c("Sample", metadata_var), with=F], all.x = T)
+  mets = mets[!is.na(get(metadata_var))]
   bad_mets = mets[!is.na(value), length(Sample),by=c("KEGG",metadata_var)]
   missing_mets = bad_mets[,length(unique(get(metadata_var))), by=KEGG]
   bad_mets = c(bad_mets[V1 < 3, unique(KEGG)], missing_mets[V1 < 2, KEGG])

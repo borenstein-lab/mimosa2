@@ -290,6 +290,23 @@ test_met_enrichment = function(node_data, met_list){
 }
 
 
+
+#' Basic species-metaoblite correlation for comparison
+#'
+#' @import data.table
+#' @param species long-form table of species abundances
+#' @param mets long-form table of metabolite concentrations
+#' @param method Correlation method, must be one recognized by cor.test
+#' @return Table of correlation coefficients and p-values for every species-metabolite pair with sufficient complete sample data
+#' @examples
+#' @export
+basic_correlation_matrix = function(species, mets, method="pearson"){
+  all_dats = merge(species, mets, by = "Sample", allow.cartesian = T) #big table
+  cor_results = all_dats[,cor.test(value.x, value.y, method = method, use = "complete.obs")[c("estimate", "p.value")], by = list(Species, compound)]
+  return(cor_results)
+}
+
+
 ##Functions for selecting approximate compound identifications based on MetaboSearch output
 select_best_id2 = function(met_table2, met_data, net_compounds, final_method = "first"){ ###no retention time, swedish data format
   met_table2[,Mass:=as.character(Mass)]

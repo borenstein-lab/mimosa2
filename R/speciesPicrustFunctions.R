@@ -137,12 +137,16 @@ build_generic_network = function(contribution_table, kegg_paths){
 get_genomic_content_from_picrust_table = function(otu, picrust_ko_table_directory, picrust_ko_table_suffix){
 
   # Read in the file for this otu's genomic content
-  otu_genomic_content = fread(paste(picrust_ko_table_directory, otu, picrust_ko_table_suffix, sep=""), header=T)
-  colnames(otu_genomic_content) = c("OTU", "Gene", "copy_number")
-  otu_genomic_content[,OTU:= as.character(OTU)]
-
-
-  return(otu_genomic_content)
+  file_id = paste(picrust_ko_table_directory, otu, picrust_ko_table_suffix, sep="")
+  if(file.exists(file_id)){
+    otu_genomic_content = fread(file_id, header=T)
+    colnames(otu_genomic_content) = c("OTU", "Gene", "copy_number")
+    otu_genomic_content[,OTU:= as.character(OTU)]
+    return(otu_genomic_content)
+  } else {
+    warning("OTU file not found")
+    return(NULL)
+  }
 }
 
 #' Returns the melted picrust ko table corresponding to the given set of OTUs
@@ -189,11 +193,10 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
   colnames(picrust_normalization_table) = c("OTU", "norm_factor")
   picrust_normalization_table[,OTU:= as.character(OTU)]
 
-  if(!all(otu_table[,OTU] %in% picrust_normalization_table[,OTU])) stop("Not all OTUs found in PICRUSt table")
-
+  if(!all(otu_table[,OTU] %in% picrust_normalization_table[,OTU])) warning("Not all OTUs found in PICRUSt table")
 
   # Get the subset of the ko table mapping present OTUs to their genomic content
-  subset_picrust_ko_table = get_subset_picrust_ko_table(otu_table[,unique(OTU)], picrust_ko_table_directory = picrust_ko_table_directory,
+  subset_picrust_ko_table = get_subset_picrust_ko_table(otu_table[OTU %in% picrust_normalization_table[,OTU],unique(OTU)], picrust_ko_table_directory = picrust_ko_table_directory,
                                                         picrust_ko_table_suffix = picrust_ko_table_suffix)
 
   # Merge with the table of 16S normalization factors

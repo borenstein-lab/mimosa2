@@ -620,9 +620,9 @@ run_mimosa2 = function(config_table){
     cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt)
     indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
     var_shares_metagenome = calculate_var_shares(indiv_cmps2)
-    return(list(varShares = var_shares, modelData = cmp_mods[[1]], varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2))
+    return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
   } else {
-    return(list(varShares = var_shares, modelData = cmp_mods[[1]]))
+    return(list(varShares = var_shares, modelData = cmp_mods[[1]]), modelNetwork = network)
   }
   #Order dataset for plotting
   #met_order = var_shares[Species=="Residual"][order(VarShare, increasing = T), metID]

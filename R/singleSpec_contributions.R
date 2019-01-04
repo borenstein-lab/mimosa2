@@ -333,7 +333,9 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
 get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, otu_id = "all", otu_file, valueVar = "singleMusicc", sum_to_genus, write_out = T, comparison = "cmps", met_data = "", taxonomy_file = "", var_share = F){
   #devtools::load_all()
   if(!valueVar %in% c("RelAbundSample", "singleMusicc")) stop("Invalid abundance metric, must be RelAbundSample or singleMusicc")
-  contribs = data.table::fread(contrib_file, stringsAsFactors = F)
+  if(!data.table::is.data.table(contrib_file)){ #Allow supplying the contrib table directly
+    contribs = data.table::fread(contrib_file, stringsAsFactors = F)
+  } 
   contribs = contribs[CountContributedByOTU != 0]
   all_otus = sort(unique(contribs[,OTU]))
     if(valueVar == "RelAbundSample"){ #Using relative abundance out of all genes

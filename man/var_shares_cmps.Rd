@@ -23,6 +23,12 @@ var_shares_cmps(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net,
 \item{single_spec_cmps}{single-species CMP scores calculated from get_spec_contribs function}
 
 \item{contrib_threshold}{Threshold for binary contribution}
+
+\item{scaled_pos_contrib}{Whether to use scaled positive contributions}
+
+\item{cov}{Whether to calculate contribution to covariance with mets instead of variance (requires supplying metabolite data)}
+
+\item{met_data}{Metabolite concentration data (if calculating contribution to covariance)}
 }
 \value{
 data.table of variance contributions to CMP scores

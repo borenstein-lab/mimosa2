@@ -129,6 +129,9 @@ cmp_species_contributions_picrust = function(j, cmps_sub_good, all_rxns, subject
 #' @param all_taxa vector of OTUs
 #' @param single_spec_cmps single-species CMP scores calculated from get_spec_contribs function
 #' @param contrib_threshold Threshold for binary contribution
+#' @param scaled_pos_contrib Whether to use scaled positive contributions
+#' @param cov Whether to calculate contribution to covariance with mets instead of variance (requires supplying metabolite data)
+#' @param met_data Metabolite concentration data (if calculating contribution to covariance)
 #' @return data.table of variance contributions to CMP scores
 #' @examples
 #' var_shares_cmps(cmps_total, all_rxns, subjects, norm_kos, ko_net, all_taxa, single_spec_cmps, contrib_threshold)
@@ -154,26 +157,33 @@ var_shares_cmps = function(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net, 
   }
 
   #Calculate var shares of CMP scores
-  var_shares = rbindlist(lapply(all_taxa, function(y){
-    all1 = rbindlist(lapply(all_taxa, function(x){
-#      if(full_spec_cmps_wide[,!all(is.na(get(as.character(x))))] & full_spec_cmps_wide[,!all(is.na(get(as.character(y))))]){
+  if(cov == F){
+    var_shares = rbindlist(lapply(all_taxa, function(y){
+      all1 = rbindlist(lapply(all_taxa, function(x){
+        #      if(full_spec_cmps_wide[,!all(is.na(get(as.character(x))))] & full_spec_cmps_wide[,!all(is.na(get(as.character(y))))]){
         foo = full_spec_cmps_wide[,cov(get(as.character(x)), get(as.character(y)), use="complete.obs"), by = compound]
-#      }
-      foo[,Species:=x]
-      return(foo)
+        #      }
+        foo[,Species:=x]
+        return(foo)
+      }))
+      all1[,Species2:=y]
     }))
-    all1[,Species2:=y]
-  }))
-  var_shares = var_shares[,sum(V1, na.rm = T),by=list(compound, Species)]
+    var_shares = var_shares[,sum(V1, na.rm = T),by=list(compound, Species)]
+    #these are different b/c of the network generation for each species - need to make sure we don't do that. probably mimosa will move to totaling up species-level scores anyway so will be a moot point.
+    #evidently not the only reason - KOs are in relative abundance space for community-level cmps. hmm.
+    true_met_var = melt(cmps_sub_good)[,list(var(value), mean(value)), by = compound]
+    setnames(true_met_var, c("V1", "V2"), c("TrueVar", "Mean"))
+    var_shares = merge(var_shares, true_met_var, by="compound")
+    var_shares[,VarShare:=V1/TrueVar]
+    #if(!var_shares[,sum(VarShare), by = compound][,all(V1==1)]) stop("Inconsistency between total CMPs and sum of species contributors!")
+    var_shares[,Pass:=ifelse(abs(VarShare) > contrib_threshold, 1,0)]
+  } else {
+    full_spec_cmps_wide = merge(full_spec_cmps_wide, met_data, by=c("Sample", "compound"))
+    cov_shares = rbindlist(lapply(all_taxa, function(y){
+      foo = full_spec_cmps_wide[,cov(get(as.character(y)), value, use = "complete.obs"), by=compound]
+    }))
+  }
 
-  #these are different b/c of the network generation for each species - need to make sure we don't do that. probably mimosa will move to totaling up species-level scores anyway so will be a moot point.
-  #evidently not the only reason - KOs are in relative abundance space for community-level cmps. hmm.
-  true_met_var = melt(cmps_sub_good)[,list(var(value), mean(value)), by = compound]
-  setnames(true_met_var, c("V1", "V2"), c("TrueVar", "Mean"))
-  var_shares = merge(var_shares, true_met_var, by="compound")
-  var_shares[,VarShare:=V1/TrueVar]
-  #if(!var_shares[,sum(VarShare), by = compound][,all(V1==1)]) stop("Inconsistency between total CMPs and sum of species contributors!")
-  var_shares[,Pass:=ifelse(abs(VarShare) > contrib_threshold, 1,0)]
   return(var_shares)
 }
 
@@ -326,16 +336,17 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
 #' @param comparison "mets" or "cmps"; whether to compare with community CMPs or metabolites themselves
 #' @param met_data Optional, metabolite concentration table if comparison = "mets"
 #' @param var_share If selected, will calculate variance share contributions instead of correlations
+#' @param cov_share If selected, will calculate covariance share contributions instead of correlations (cannot select both var and cov). Must provide metabolite concentration data.
 #' @return table of species, metabolites, whether that species is a contributor for that metabolite and the correlation strength
 #' @examples
 #' read_files(gene_file, met_file)
 #' @export
-get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, otu_id = "all", otu_file, valueVar = "singleMusicc", sum_to_genus, write_out = T, comparison = "cmps", met_data = "", taxonomy_file = "", var_share = F){
+get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, otu_id = "all", otu_file, valueVar = "singleMusicc", sum_to_genus, write_out = T, comparison = "cmps", met_data = "", taxonomy_file = "", var_share = F, cov_share = F){
   #devtools::load_all()
   if(!valueVar %in% c("RelAbundSample", "singleMusicc")) stop("Invalid abundance metric, must be RelAbundSample or singleMusicc")
   if(!data.table::is.data.table(contrib_file)){ #Allow supplying the contrib table directly
     contribs = data.table::fread(contrib_file, stringsAsFactors = F)
-  } 
+  }
   contribs = contribs[CountContributedByOTU != 0]
   all_otus = sort(unique(contribs[,OTU]))
     if(valueVar == "RelAbundSample"){ #Using relative abundance out of all genes
@@ -369,7 +380,7 @@ get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, o
       contribs = contribs[Sample %in% subjects]
     }
     if(length(subjects)==0){ stop("Sample IDs not consistent between contributions and genes/metabolites")}
-    if(var_share == F){
+    if(var_share == F & cov_share == F){
       #get CMP scores
       if(otu_id != "all"){
         kos_alone = all_koAbunds_byOTU[which(all_otus == otu_id)]
@@ -377,23 +388,27 @@ get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, o
         load(results_file)
         cmps_alone = get_cmp_scores(ko_net[[1]], kos_alone)
         if(write_out) write.table(cmps_alone, file = paste0(out_prefix, otu_id, "_cmps.txt"), quote=F, row.names=F, sep = "\t")
-    }else{
-      cmps_alone = get_all_singleSpec_cmps(all_otus, all_koAbunds_byOTU, valueVar, out_prefix = out_prefix, rxn_table = ko_net[[3]], write_out = write_out) #ko_net from results file
-    }
-    ##Analyze contributions
-    #  if(!identical(sort(subjects), sort(unique(as.character(contribs[,Sample]))))){ stop("Samples not consistent between contributions and genes/metabolites")}
-    cmps_sub_good = get_cmp_scores(ko_net[[1]], norm_kos) # Full community cmp scores
-    cmp_sub_good = cmps_sub_good[node_data[,compound]]
-    all_rxns = lapply(node_data[,compound], function(x){ return(ko_net[[3]][Reac==x|Prod==x])})
-    all_rxns = lapply(all_rxns,get_non_rev_rxns)
+      }else{
+        cmps_alone = get_all_singleSpec_cmps(all_otus, all_koAbunds_byOTU, valueVar, out_prefix = out_prefix, rxn_table = ko_net[[3]], write_out = write_out) #ko_net from results file
+      }
+      ##Analyze contributions
+      #  if(!identical(sort(subjects), sort(unique(as.character(contribs[,Sample]))))){ stop("Samples not consistent between contributions and genes/metabolites")}
+      cmps_sub_good = get_cmp_scores(ko_net[[1]], norm_kos) # Full community cmp scores
+      cmp_sub_good = cmps_sub_good[node_data[,compound]]
+      all_rxns = lapply(node_data[,compound], function(x){ return(ko_net[[3]][Reac==x|Prod==x])})
+      all_rxns = lapply(all_rxns,get_non_rev_rxns)
     #  if(!all(is.na(match(c("cmps_alone", "all_otus"),ls())))){ #If all of these do not already exist
     #contribs = data.table::fread(contrib_file)
-    spec_contrib=rbindlist(lapply(1:length(node_data[,compound]),cmp_species_contributions_picrust, cmps_sub_good = cmp_sub_good, all_rxns = all_rxns, subjects = subjects, norm_kos = norm_kos, ko_net = ko_net, all_taxa = all_otus, single_spec_cmps = cmps_alone, cor_with=T, comparison, met_data))
-    spec_contrib = spec_contrib[!is.na(Cor)]
-  } else {
-    cmps_alone = get_all_singleSpec_cmps(all_otus, all_koAbunds_byOTU, valueVar, out_prefix = out_prefix, rxn_table = ko_net[[3]], write_out = write_out, ko_net = ko_net)
-    spec_contrib = var_shares_cmps(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net, all_otus, cmps_alone)
-  }
+      spec_contrib=rbindlist(lapply(1:length(node_data[,compound]),cmp_species_contributions_picrust, cmps_sub_good = cmp_sub_good, all_rxns = all_rxns, subjects = subjects, norm_kos = norm_kos, ko_net = ko_net, all_taxa = all_otus, single_spec_cmps = cmps_alone, cor_with=T, comparison, met_data))
+      spec_contrib = spec_contrib[!is.na(Cor)]
+    } else{
+      cmps_alone = get_all_singleSpec_cmps(all_otus, all_koAbunds_byOTU, valueVar, out_prefix = out_prefix, rxn_table = ko_net[[3]], write_out = write_out, ko_net = ko_net)
+      if(var_share == T & cov_share == F){
+        spec_contrib = var_shares_cmps(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net, all_otus, cmps_alone)
+      } else if(cov_share ==T & var_share == F){
+        spec_contrib = var_shares_cmps(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net, all_otus, cmps_alone, cov = T, met_data = met_data)
+      }
+    }
   ## Save output
   if(write_out) write.table(spec_contrib, file = paste0(out_prefix, "_specContrib.txt"), quote=F, row.names = F, sep = "\t")
   #save(spec_contrib, file = paste0(out_dir, "/picrust_spec_contrib_",valueVar,".rda"))

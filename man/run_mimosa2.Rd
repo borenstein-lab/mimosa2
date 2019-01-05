@@ -4,10 +4,14 @@
 \alias{run_mimosa2}
 \title{Run a MIMOSA 2 analysis}
 \usage{
-run_mimosa2(config_table)
+run_mimosa2(config_table, species = "", mets = "")
 }
 \arguments{
 \item{config_table}{Data.table of input files and settings for MIMOSA analysis}
+
+\item{species}{Optionally provide already-read-in species data}
+
+\item{mets}{Optionally provide already-read-in metabolite data}
 }
 \value{
 Scaling model and variance contribution results

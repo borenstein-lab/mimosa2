@@ -7,7 +7,7 @@
 get_spec_contribs(contrib_file, data_dir, results_file, out_prefix,
   otu_id = "all", otu_file, valueVar = "singleMusicc", sum_to_genus,
   write_out = T, comparison = "cmps", met_data = "",
-  taxonomy_file = "", var_share = F)
+  taxonomy_file = "", var_share = F, cov_share = F)
 }
 \arguments{
 \item{contrib_file}{File where metagenome_contributions PICRUSt output is located}
@@ -31,6 +31,8 @@ get_spec_contribs(contrib_file, data_dir, results_file, out_prefix,
 \item{met_data}{Optional, metabolite concentration table if comparison = "mets"}
 
 \item{var_share}{If selected, will calculate variance share contributions instead of correlations}
+
+\item{cov_share}{If selected, will calculate covariance share contributions instead of correlations (cannot select both var and cov). Must provide metabolite concentration data.}
 }
 \value{
 table of species, metabolites, whether that species is a contributor for that metabolite and the correlation strength

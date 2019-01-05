@@ -16,7 +16,7 @@ fit_cmp_mods = function(species_cmps, mets_melt){
   model_dat = data.table(compound = all_comps)
   resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
   for(x in 1:length(all_comps)){
-    scaling_mod = tot_cmps[compound==all_comps[x], lm(value~V1)]
+    scaling_mod = try(tot_cmps[compound==all_comps[x], lm(value~V1)])
     scaling_coefs = coef(scaling_mod)
     scaling_resids = resid(scaling_mod)
     model_dat[x,Intercept:=scaling_coefs[1]]
@@ -111,7 +111,7 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
           legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), legend.text = element_text(size=6),
           panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches"), legend.position = "bottom", legend.key.size = unit(0.1, "inches")) + guides(fill = guide_legend(ncol = 2)) +
     ylab("Contribution to variance") + xlab("Taxon") +  coord_flip() + ggtitle(metabolite)#
-  
+
 }
 
 #' Plot summary of metabolite-species contributions
@@ -149,7 +149,7 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
     theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared")
   plot1 = ggplot(varShares, aes(x=metID, y = Species2)) + geom_tile(aes_string(fill = plot_var)) + theme_minimal() +
     theme(axis.text.x = element_blank(), axis.line = element_blank(), legend.position = "bottom") +
-    scale_fill_gradientn(colours = c(brewer.pal(9,"Reds")[9], brewer.pal(9,"Reds")[8], "white",  brewer.pal(9, "Blues")[8],  brewer.pal(9, "Blues")[9]), 
+    scale_fill_gradientn(colours = c(brewer.pal(9,"Reds")[9], brewer.pal(9,"Reds")[8], "white",  brewer.pal(9, "Blues")[8],  brewer.pal(9, "Blues")[9]),
                          values = scales::rescale(c(-170, -2, 0, 2, 100)), name = color_lab)  + ylab("Taxon")+
     xlab("Metabolite")
   plot_all = plot_grid(resid_plot, plot1, nrow = 2, align = "v", axis = "lr", rel_heights = c(1, 2.5))
@@ -254,13 +254,13 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         setnames(new_species, "dbID", "OTU")
         mod_list = seq_results[,unique(dbID)]
         species = new_species
-        
+
         # if(database != get_text("database_choices")[1]){
         #   seq_results = get_agora_from_otus(species_dat[,OTU], database = database)
         # } else {
         # }
         ### Convert species abundances to AGORA species IDs
-        
+
       }  else stop("Model source option not found")
     } else if(config_table[V1=="database", V2==get_text("database_choices")[2]]){ ## GG OTUs
       #Nothing to do
@@ -367,7 +367,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     #separate internal/external?
     setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
   }
-  
+
   return(spec_cmps)
 }
 
@@ -577,19 +577,27 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #'
 #' @import data.table
 #' @param config_table Data.table of input files and settings for MIMOSA analysis
+#' @param species Optionally provide already-read-in species data
+#' @param mets Optionally provide already-read-in metabolite data
 #' @return Scaling model and variance contribution results
 #' @examples
 #' run_mimosa2(species_file, met_file, config_file)
 #' @export
-run_mimosa2 = function(config_table){
+run_mimosa2 = function(config_table, species = "", mets = ""){
   #process arguments
-  config_table = check_config_table(config_table)
-  file_list = as.list(config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V2])
-  names(file_list) = config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V1]
-  data_inputs = read_mimosa2_files(file_list, config_table, app = F)
-  species = data_inputs$species
-  mets = data_inputs$mets
-  
+  if(!identical(species, "") & !identical(mets, "")){
+    config_table = check_config_table(config_table, app = T)
+    data_inputs = list(species = species, mets = mets)
+  } else {
+    config_table = check_config_table(config_table, app = F)
+    file_list = as.list(config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V2])
+    names(file_list) = config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V1]
+    data_inputs = read_mimosa2_files(file_list, config_table, app = F)
+    species = data_inputs$species
+    mets = data_inputs$mets
+
+  }
+
   network_results = build_metabolic_model(species, config_table)
   network = network_results[[1]]
   species = network_results[[2]]
@@ -602,7 +610,7 @@ run_mimosa2 = function(config_table){
     # metagenome_network = metagenome_data[[2]]
     #Metagenome data
   }
-  
+
   if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
     mets = map_to_kegg(mets)
   }
@@ -622,12 +630,12 @@ run_mimosa2 = function(config_table){
     var_shares_metagenome = calculate_var_shares(indiv_cmps2)
     return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
   } else {
-    return(list(varShares = var_shares, modelData = cmp_mods[[1]]), modelNetwork = network)
+    return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network))
   }
   #Order dataset for plotting
   #met_order = var_shares[Species=="Residual"][order(VarShare, increasing = T), metID]
   #var_shares[,metID:=factor(metID, levels = metID)]
-  
+
 }
 
 #' Assign seq vars to OTUs or AGORA models using vsearch

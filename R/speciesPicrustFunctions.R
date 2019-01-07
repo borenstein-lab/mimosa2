@@ -144,7 +144,7 @@ get_genomic_content_from_picrust_table = function(otu, picrust_ko_table_director
     otu_genomic_content[,OTU:= as.character(OTU)]
     return(otu_genomic_content)
   } else {
-    warning("OTU file not found")
+    warning(paste0("OTU file ", otu, " not found"))
     return(NULL)
   }
 }
@@ -189,7 +189,7 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
   #otu_table = data.table(OTU = otu_table[,as.character(OTU)], otu_table[,lapply(.SD, function(x){ return(x/sum(x))}), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])
 
   # Read the normalization table and standardize column names
-  picrust_normalization_table = fread(paste("gunzip -c ", picrust_norm_file, sep=""), header=T)
+  picrust_normalization_table = fread(picrust_norm_file, header=T) #cmd = paste("gunzip -c ", picrust_norm_file, sep="")
   colnames(picrust_normalization_table) = c("OTU", "norm_factor")
   picrust_normalization_table[,OTU:= as.character(OTU)]
 

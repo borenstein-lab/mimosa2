@@ -224,6 +224,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
 #' @param species Table of species/taxon abundances
 #' @param config_table Data.table of input files and settings for MIMOSA
 #' @param netAdd Table of netowrk information to add to the model
+#' @param manual_agora Option to provide AGORA species directly (for simulation data)
 #' @return Data.table of network model of genes and reactions for each species/taxon
 #' @examples
 #' build_metabolic_model(config_table)

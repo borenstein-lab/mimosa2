@@ -221,7 +221,7 @@ build_model_components = function(all_mods, species_names, remove_rev = T, missi
 #' Returns AGORA species that a list of Greengenes OTUs were mapped to
 #'
 #' @import data.table
-#' @param species GG or SILVA OTU abundance table
+#' @param otus GG or SILVA OTU abundance table
 #' @param database Greengenes or SILVA
 #' @param gg_file_path File path to output of gg->agora vsearch mappings
 #' @param silva_file_path File path to output of silva->agora vsearch mappings
@@ -237,7 +237,8 @@ otus_to_agora = function(otus, database = "Greengenes", gg_file_path = "data/rep
   } else {
     stop("Database option not found")
   }
-  species_melt = melt(species, id.var = "OTU", variable.name = "Sample")
+  species_melt = melt(otus, id.var = "OTU", variable.name = "Sample")
+  species_melt[,OTU:=as.character(OTU)]
   species_melt = merge(species_melt, map_table, all.x = T)
   new_species = dcast(species_melt[,sum(value), by=list(AGORA_ID, Sample)], AGORA_ID~Sample, fill = 0)
   setnames(new_species, "AGORA_ID", "OTU")

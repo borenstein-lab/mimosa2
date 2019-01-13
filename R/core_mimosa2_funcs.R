@@ -17,13 +17,15 @@ fit_cmp_mods = function(species_cmps, mets_melt){
   resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
   for(x in 1:length(all_comps)){
     scaling_mod = try(tot_cmps[compound==all_comps[x], lm(value~V1)])
-    scaling_coefs = coef(scaling_mod)
-    scaling_resids = resid(scaling_mod)
-    model_dat[x,Intercept:=scaling_coefs[1]]
-    model_dat[x,Slope:=scaling_coefs[2]]
-    model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
-    if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
-    resid_dat[compound==all_comps[x], Resid:=scaling_resids]
+    if(class(scaling_mod) != "try-error"){
+      scaling_coefs = coef(scaling_mod)
+      scaling_resids = resid(scaling_mod)
+      model_dat[x,Intercept:=scaling_coefs[1]]
+      model_dat[x,Slope:=scaling_coefs[2]]
+      model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
+      if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
+      resid_dat[compound==all_comps[x], Resid:=scaling_resids]
+    }
   }
   return(list(model_dat, resid_dat))
 }
@@ -42,8 +44,12 @@ fit_cmp_mods = function(species_cmps, mets_melt){
 add_residuals = function(species_cmps, model_dat, resid_dat){
   species_cmps = species_cmps[compound %in% model_dat[,compound]] #Let go of metabolites not measured
   all_comps = species_cmps[,unique(compound)]
+  print(model_dat)
+  
+  #all_comps = model_dat[!is.na(Rsq), compound]
   resid_dat[,Species:="Residual"]
   if("Resid" %in% names(resid_dat)) setnames(resid_dat, "Resid", "newValue")
+  species_cmps[,newValue:=NA]
   for(x in all_comps){
     if(!is.na(model_dat[compound==x,Slope])){
       species_cmps[compound==x, newValue:=CMP*model_dat[compound==x, Slope]]
@@ -596,12 +602,16 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
     data_inputs = read_mimosa2_files(file_list, config_table, app = F)
     species = data_inputs$species
     mets = data_inputs$mets
-
   }
-
-  network_results = build_metabolic_model(species, config_table)
-  network = network_results[[1]]
-  species = network_results[[2]]
+  if(!"manualAGORA" %in% config_table[,V1]){
+    network_results = build_metabolic_model(species, config_table)
+    network = network_results[[1]]
+    species = network_results[[2]]
+  } else {
+    network_results = build_metabolic_model(species, config_table, manual_agora = T)
+    network = network_results[[1]]
+    species = network_results[[2]]
+  }
   if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
     #If we are doing a comparison of the species network and the metagenome network
     #Metagenome data
@@ -617,6 +627,8 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   }
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
+  } else if("manualAGORA" %in% config_table[,V1]){
+    indiv_cmps = get_species_cmp_scores(species, network, manual_agora = T)
   } else {
     indiv_cmps = get_species_cmp_scores(species, network)
   }

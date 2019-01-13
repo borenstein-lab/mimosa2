@@ -71,13 +71,16 @@ filter_species_abunds = function(species_dat, filter_type = "mean", minMeanAbund
 #' @examples
 #' emm_to_edge_list(s_mat)
 #' @export
+#' 
 emm_to_edge_list = function(emm){
-  all_rxn_ids = names(emm)[2:ncol(emm)]
   net_melted = melt(emm, id.var = "Compound")[value != 0]
   net_melted[,Prod:=ifelse(value > 0, Compound,0)]
   net_melted[,Reac:=ifelse(value < 0, Compound,0)]
-  edge_list = rbindlist(lapply(all_rxn_ids, function(x){
-    rxn_sub = net_melted[variable==x]
+  all_rxn_ids = net_melted[,unique(as.character(variable))]
+  edge_list = data.table()
+  
+  for(k in 1:length(all_rxn_ids)){
+    rxn_sub = net_melted[variable==all_rxn_ids[k]]
     if(nrow(rxn_sub[Prod !=0 ]) > 0 & nrow(rxn_sub[Reac != 0]) > 0){
       edge_list_sub = data.table(expand.grid(rxn_sub[,unique(Reac[Reac !=0])], rxn_sub[,unique(Prod[Prod != 0])]))
       setnames(edge_list_sub, c("Reac", "Prod"))
@@ -86,17 +89,40 @@ emm_to_edge_list = function(emm){
       edge_list_sub[Reac==0, Reac:=NA]
       edge_list_sub[Prod==0, Prod:=NA]
     }
-    edge_list_sub[,KO:=x]
-    reac_info = rxn_sub[Reac != 0, list(Reac, value)]
-    setnames(reac_info, "value", "stoichReac")
-    prod_info = rxn_sub[Prod != 0, list(Prod, value)]
-    setnames(prod_info, "value", "stoichProd")
-    if(nrow(rxn_sub[Reac != 0]) > 0) edge_list_sub = merge(edge_list_sub, reac_info, by = "Reac", all.x = T)
-    if(nrow(rxn_sub[Prod != 0]) > 0) edge_list_sub = merge(edge_list_sub, prod_info, by = "Prod", all.x = T)
-  }), fill = T)
-  edge_list[,stoichReac:=-1*stoichReac]
+    edge_list_sub[,KO:=all_rxn_ids[k]]
+    edge_list_sub[,stoichReac:=sapply(Reac, function(x){ return(rxn_sub[Compound==x,abs(value)])})]
+    edge_list_sub[,stoichProd:=sapply(Prod, function(x){ return(rxn_sub[Compound==x,value])})]
+    edge_list = rbind(edge_list, edge_list_sub)
+  }
   return(edge_list)
 }
+
+# emm_to_edge_list = function(emm){
+#   all_rxn_ids = names(emm)[2:ncol(emm)]
+#   net_melted = melt(emm, id.var = "Compound")[value != 0]
+#   net_melted[,Prod:=ifelse(value > 0, Compound,0)]
+#   net_melted[,Reac:=ifelse(value < 0, Compound,0)]
+#   edge_list = rbindlist(lapply(all_rxn_ids, function(x){
+#     rxn_sub = net_melted[variable==x]
+#     if(nrow(rxn_sub[Prod !=0 ]) > 0 & nrow(rxn_sub[Reac != 0]) > 0){
+#       edge_list_sub = data.table(expand.grid(rxn_sub[,unique(Reac[Reac !=0])], rxn_sub[,unique(Prod[Prod != 0])]))
+#       setnames(edge_list_sub, c("Reac", "Prod"))
+#     } else {
+#       edge_list_sub = rxn_sub[,list(Reac, Prod)]
+#       edge_list_sub[Reac==0, Reac:=NA]
+#       edge_list_sub[Prod==0, Prod:=NA]
+#     }
+#     edge_list_sub[,KO:=x]
+#     reac_info = rxn_sub[Reac != 0, list(Reac, value)]
+#     setnames(reac_info, "value", "stoichReac")
+#     prod_info = rxn_sub[Prod != 0, list(Prod, value)]
+#     setnames(prod_info, "value", "stoichProd")
+#     if(nrow(rxn_sub[Reac != 0]) > 0) edge_list_sub = merge(edge_list_sub, reac_info, by = "Reac", all.x = T)
+#     if(nrow(rxn_sub[Prod != 0]) > 0) edge_list_sub = merge(edge_list_sub, prod_info, by = "Prod", all.x = T)
+#   }), fill = T)
+#   edge_list[,stoichReac:=-1*stoichReac]
+#   return(edge_list)
+# }
 
 #' Function called by run_pipeline to get species-specific reaction network
 #'
@@ -175,11 +201,12 @@ get_subset_picrust_ko_table = function(otus, picrust_ko_table_directory, picrust
 #' @param picrust_norm_file File path to PICRUSt 16S normalization reference data
 #' @param picrust_ko_table_directory Directory of PICRUSt genome OTU predictions
 #' @param picrust_ko_table_suffix File naming of PICRUSt genome OTU predictions
+#' @param copynum_column Whether to include a copy number column in the contribution table
 #' @return Table of PICRUSt-based contribution abundances for all OTUs
 #' @examples
 #' generate_contribution_table_using_picrust(otu_table, picrust_norm_file, picrust_dir, picrust_suffix)
 #' @export
-generate_contribution_table_using_picrust = function(otu_table, picrust_norm_file, picrust_ko_table_directory, picrust_ko_table_suffix){
+generate_contribution_table_using_picrust = function(otu_table, picrust_norm_file, picrust_ko_table_directory, picrust_ko_table_suffix, copynum_column = F){
 
   #Melt table and convert to relative abundances
   otu_table = melt(otu_table, id.var = "OTU", value.name = "abundance", variable.name = "Sample")
@@ -208,7 +235,11 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
   # Make a contribution column by dividing the OTU abundances by the normalization factors and multiplying with the KO copy number
   contribution_table[,contribution := (abundance * copy_number) / norm_factor]
 
-  contribution_table = contribution_table[,list(Sample, OTU, Gene, contribution)]
+  if(copynum_column){
+    contribution_table = contribution_table[,list(Sample, OTU, Gene, contribution, copy_number)]
+  } else {
+    contribution_table = contribution_table[,list(Sample, OTU, Gene, contribution)]
+  } 
 
   # Convert sample, OTU, and function names to character type
   contribution_table[,Sample:= as.character(Sample)]

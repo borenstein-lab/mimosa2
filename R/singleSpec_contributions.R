@@ -185,6 +185,8 @@ var_shares_cmps = function(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net, 
     full_spec_cmps_wide = merge(full_spec_cmps_wide, met_data, by=c("Sample", "compound"))
     cov_shares = rbindlist(lapply(all_taxa, function(y){
       foo = full_spec_cmps_wide[,cov(get(as.character(y)), value, use = "complete.obs"), by=compound]
+      foo[,Species:=y]
+      return(foo)
     }))
     cmps_melt = melt(cmps_sub_good, id.var = "compound", variable.name ="Sample", value.name = "CMP")
     cmps_melt = merge(cmps_melt, met_data, by = c("compound", "Sample"))

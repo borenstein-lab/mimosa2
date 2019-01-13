@@ -50,7 +50,7 @@ get_S_mats = function(all_mods, species_names, edge_list = F){
       foo = emm_to_edge_list(data.table(all_S_mat[[x]], Compound = row.names(all_S_mat[[x]])))
       foo[,Species:=species_names[x]]
       return(foo)
-    }))
+    }), fill = T, use.names = T)
   }
   return(all_S_mat)
 }

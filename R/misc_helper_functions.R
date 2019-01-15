@@ -32,6 +32,30 @@ read_files = function(genefile, metfile){
   return(list(genes, mets))
 }
 
+
+#' Function for reformatting a Humann2 stratified KO abundance table into a picrust-format table
+#'
+#' @import data.table
+#' @param path_to_humann_file File path to humann2 stratified KO abundance table. 
+#' @return data.table formatted in the style of a PICRUSt species contribution table compatible with MIMOSA
+#' @examples
+#' kos_from_species(bv_qpcr, genome_content)
+#' @export
+humann2_format_contributions = function(path_to_humann_file, file_read = F){
+  #Provide either file path or table itself
+  if(!file_read) gene_contribs = fread(path_to_humann_file) else gene_contribs = path_to_humann_file
+  setnames(gene_contribs, c("ID", gsub("_Abundance-RPKs", "", names(gene_contribs)[2:ncol(gene_contribs)])))
+  setnames(gene_contribs, gsub("-", "_", names(gene_contribs)))
+  gene_contribs[,Taxon:=gsub(".*\\|", "", ID)]
+  gene_contribs[,KO:=gsub("\\|.*", "", ID)]
+  gene_contribs_good = melt(gene_contribs, id.vars = c("ID", "Taxon", "KO"), variable.name = "Sample")
+  setnames(gene_contribs_good, c("Taxon", "KO", "value"), c("OTU", "Gene", "CountContributedByOTU"))
+  gene_contribs_good[,ID:=NULL]
+  gene_contribs_good = gene_contribs_good[OTU != Gene]
+  return(gene_contribs_good)
+}
+
+
 #' Get network distances between 2 compounds
 #'
 #' @import data.table

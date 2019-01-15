@@ -191,16 +191,32 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     }
   } else {
     #Read metagenome file and hold it as species if we are using it for that
-    if(app) species = fread(file_list[["metagenome"]]$datapath) else species = fread(file_list[["metagenome"]])
+    if(app){
+      species = fread(file_list[["metagenome"]]$datapath) 
+    } else {
+      species = fread(file_list[["metagenome"]])
+    }
+    if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]]){
+      if(app){
+        species = humann2_format_contributions(file_list[["metagenome"]]$datapath)
+      } else {
+        species = humann2_format_contributions(file_list[["metagenome"]])
+      }
+    }
   }
+  humann2_metagenome = ifelse(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]] & configTable[V1=="database", V2==get_text("database_choices")[4]], T, F)
   #Read metabolites
   if(app) mets = fread(file_list[["file2"]]$datapath) else mets = fread(file_list[["file2"]])
   met_nonzero_filt = ifelse(configTable[V1=="metNzeroFilter", is.numeric(V2)], configTable[V1=="metNzeroFilter", V2], 5)
   mets = met_table_fix(mets, met_nonzero_filt)
-  shared_samps = intersect(names(species), names(mets))
+  if(!humann2_metagenome) shared_samps = intersect(names(species), names(mets)) else {
+    shared_samps = intersect(names(mets), species[,unique(Sample)])
+  }
   if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
   spec_colname = ifelse(configTable[V1=="database", V2==get_text("database_choices")[4]], "KO", "OTU")
-  species = species[,c(spec_colname, shared_samps), with=F]
+  if(!humann2_metagenome) species = species[,c(spec_colname, shared_samps), with=F] else {
+    species = species[Sample %in% shared_samps]
+  }
   mets = mets[,c("compound", shared_samps), with=F]
   dat_list = list(species, mets)
   names(dat_list) = c("species", "mets")
@@ -219,6 +235,16 @@ read_mimosa2_files = function(file_list, configTable, app = T){
       #save species as metagenome also if that's what's happening
       dat_list[[extraFile]] = species
     }
+  }
+  if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]] & configTable[V1=="database", V2 != get_text("database_choices")[4]] & "metagenome" %in% names(dat_list)){
+    dat_list$metagenome = humann2_format_contributions(dat_list$metagenome, file_read = T)
+  }
+  if("metagenome" %in% names(dat_list) & configTable[V1=="database", V2 != get_text("database_choices")[4]]){ #extra metagenome
+    metagenome_samps = ifelse(configTable[V1=="metagenome_format", V1==get_text("metagenome_options")[2]], dat_list$metagenome[,unique(Sample)], names(dat_list$metagenome))
+    if(sum(shared_samps %in% metagenome_samps) < 3){
+      warning("Metagenome sample IDs not compatible with species and metabolites, will be ignored")
+      dat_list$metagenome = NULL
+    } 
   }
   return(dat_list)
 }
@@ -283,23 +309,44 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         mod_list = species[!is.na(OTU), OTU]
       } else stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
     }
+    # } else {
+    #   stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
+    # }
     ### Now build network from mod_list
     if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
       if(config_table[V1=="database", !V2 %in% get_text("database_choices")[c(1, 2, 4)]]){
         stop("Only Greengenes currently implemented")
       }
       if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+        if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
+          stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
+        }
         #Get network from metagenome KOs
-        species = species[rowSums(species[,names(species) != "KO", with=F]) != 0]
-        network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
-        network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
+        if(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]]){
+          species = species[rowSums(species[,names(species) != "KO", with=F]) != 0]
+          network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
+          network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
+        } else {
+          #Humann2 species-KO table
+          #We need to think about this a little more. calculation of CMP scores/copy numbers in particular.
+          print(species)
+          mod_list = species[,unique(OTU)]
+          network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
+          network = rbindlist(lapply(mod_list, function(x){ #Generate network based on KOs identified in each species
+            net1 = generate_genomic_network(species[OTU==x, unique(Gene)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
+            net1[,OTU:=x]
+            return(net1)
+          }))
+          network[,normalized_copy_number:=1]
+        }
       } else { ##database_choices 1 or 3
         network = get_kegg_network(mod_list, net_path = paste0(config_table[V1=="data_prefix", V2], "picrustGenomeData/indivModels/"))
       }
     } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ #AGORA
       network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "AGORA/"))
     } else stop('Invalid model format specified')
-    if(config_table[V1=="database", V2!=get_text("database_choices")[4]]){
+    if(!(config_table[V1=="database", V2==get_text("database_choices")[4]] & config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]])){
+      #Anything other than generic KOs
       species = species[OTU %in% network[,OTU]]
     }
   } else { ##Option for simulation data
@@ -326,11 +373,14 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
 #' @param species_table OTU abundance table (wide format)
 #' @param network Species-specific network table, product of build_network functions
 #' @param normalize Whether to normalize rows when making the network EMM
+#' @param relAbund Whether to use relative abundance normalization
+#' @param manual_agora Whether the metabolite are already specified using AGORA/BiGG (and therefore should not be mapped back to KEGG)
+#' @param humann2 Whether the species data is long-form humann2 gene-species abundances
 #' @return data.table of cmp scores for each taxon and compound
 #' @examples
 #' get_species_cmp_scores(species_data, network)
 #' @export
-get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F){
+get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F){
   network[is.na(stoichReac), stoichReac:=0] #solve NA problem
   network[is.na(stoichProd), stoichProd:=0]
   network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
@@ -338,7 +388,9 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
   spec_list = species_table[,unique(OTU)]
   species_table[,OTU:=as.character(OTU)]
   network[,OTU:=as.character(OTU)]
-  species_table = melt(species_table, id.var = "OTU", variable.name = "Sample")
+  if(!humann2) species_table = melt(species_table, id.var = "OTU", variable.name = "Sample") else {
+    setnames(species_table, c("Gene", "CountContributedByOTU"), c("KO", "value"))
+  }
   species_table[,Sample:=as.character(Sample)]
   #Convert species to relative abundance if requested
   if(relAbund){
@@ -361,7 +413,9 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
   }
   net2 = rbind(network_reacs, network_prods, fill = T)
   net2 = net2[!is.na(compound)] #remove NAs
-  spec_cmps = merge(species_table, net2, by = "OTU", allow.cartesian = T)
+  if(!humann2) spec_cmps = merge(species_table, net2, by = "OTU", allow.cartesian = T) else {
+    spec_cmps = merge(species_table, net2, by = c("OTU", "KO"), allow.cartesian = T)
+  }
   spec_cmps[,CMP:=value*stoich]
   spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound)]
   setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))

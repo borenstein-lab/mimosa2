@@ -33,11 +33,12 @@ build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_p
 #' @param all_mods List of Cobra-formatted metabolic models
 #' @param species_names List of species names for each model
 #' @param edge_list Whether to return the metabolic network as a stoichiometric matrix or edge list
+#' @param get_bounds Whether to extract information on upper and lower bound constraints (only with edge list)
 #' @return Either a stoichiometric matrix or edge list of reactions
 #' @examples
 #' get_S_mats(all_mods, my_species, edge_list = T)
 #' @export
-get_S_mats = function(all_mods, species_names, edge_list = F){
+get_S_mats = function(all_mods, species_names, edge_list = F, get_bounds = T){
   #get S matrices
   all_S_mat = list()
   for(j in 1:length(all_mods)){
@@ -51,9 +52,17 @@ get_S_mats = function(all_mods, species_names, edge_list = F){
       foo[,Species:=species_names[x]]
       return(foo)
     }), fill = T, use.names = T)
+    if(get_bounds){
+      bound_table = data.table(KO = unlist(all_mods[[j]]$rxns), LB = unlist(all_mods[[j]])$lb, UB = unlist(all_mods[[j]])$lb)
+      bound_table[,Rev:=ifelse(LB < 0 & UB > 0, 1, 0)]
+      all_S_mat = merge(all_S_mat, bound_table, by = "KO", all.x = T)
+    }
   }
   return(all_S_mat)
 }
+
+
+
 
 build_model_components = function(all_mods, species_names, remove_rev = T, missing_rxns = F, agora = F){
   #ID reversible reactions

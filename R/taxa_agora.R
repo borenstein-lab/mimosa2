@@ -53,7 +53,8 @@ get_S_mats = function(all_mods, species_names, edge_list = F, get_bounds = T){
       return(foo)
     }), fill = T, use.names = T)
     if(get_bounds){
-      bound_table = data.table(KO = unlist(all_mods[[j]]$rxns), LB = unlist(all_mods[[j]])$lb, UB = unlist(all_mods[[j]])$lb)
+      bound_table = data.table(KO = unlist(all_mods[[j]]$rxns), LB = unlist(all_mods[[j]]$lb), UB = unlist(all_mods[[j]]$ub))
+      setnames(bound_table, c("KO", "LB", "UB"))
       bound_table[,Rev:=ifelse(LB < 0 & UB > 0, 1, 0)]
       all_S_mat = merge(all_S_mat, bound_table, by = "KO", all.x = T)
     }

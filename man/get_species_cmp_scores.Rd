@@ -5,7 +5,8 @@
 \title{Updated version of getting all single-species CMP scores for every compound and taxon}
 \usage{
 get_species_cmp_scores(species_table, network, normalize = T,
-  relAbund = T, manual_agora = F)
+  relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F,
+  kos_only = F)
 }
 \arguments{
 \item{species_table}{OTU abundance table (wide format)}
@@ -13,6 +14,16 @@ get_species_cmp_scores(species_table, network, normalize = T,
 \item{network}{Species-specific network table, product of build_network functions}
 
 \item{normalize}{Whether to normalize rows when making the network EMM}
+
+\item{relAbund}{Whether to use relative abundance normalization}
+
+\item{manual_agora}{Whether the metabolite are already specified using AGORA/BiGG (and therefore should not be mapped back to KEGG)}
+
+\item{humann2}{Whether the species data is long-form humann2 gene-species abundances}
+
+\item{leave_rxns}{Return individual abundance/direction scores for each species and rxn}
+
+\item{kos_only}{Whether to call non-species-specific version of this function instead}
 }
 \value{
 data.table of cmp scores for each taxon and compound

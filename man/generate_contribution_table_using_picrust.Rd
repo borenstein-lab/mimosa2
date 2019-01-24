@@ -5,7 +5,8 @@
 \title{Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables}
 \usage{
 generate_contribution_table_using_picrust(otu_table, picrust_norm_file,
-  picrust_ko_table_directory, picrust_ko_table_suffix)
+  picrust_ko_table_directory, picrust_ko_table_suffix,
+  copynum_column = F)
 }
 \arguments{
 \item{otu_table}{OTU/seq table}
@@ -15,6 +16,8 @@ generate_contribution_table_using_picrust(otu_table, picrust_norm_file,
 \item{picrust_ko_table_directory}{Directory of PICRUSt genome OTU predictions}
 
 \item{picrust_ko_table_suffix}{File naming of PICRUSt genome OTU predictions}
+
+\item{copynum_column}{Whether to include a copy number column in the contribution table}
 }
 \value{
 Table of PICRUSt-based contribution abundances for all OTUs

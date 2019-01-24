@@ -5,7 +5,7 @@
 \title{Plot summary of metabolite-species contributions}
 \usage{
 plot_summary_contributions(varShares, include_zeros = T,
-  remove_resid_rescale = F)
+  remove_resid_rescale = F, met_id_col = "metID")
 }
 \arguments{
 \item{varShares}{Dataset of contributions}
@@ -13,6 +13,8 @@ plot_summary_contributions(varShares, include_zeros = T,
 \item{include_zeros}{Whether to plot taxa that do not have any contribution}
 
 \item{remove_resid_rescale}{Whether to remove the residual and rescale contributions}
+
+\item{met_id_col}{Column name with metabolite IDs}
 }
 \value{
 plot of contributions

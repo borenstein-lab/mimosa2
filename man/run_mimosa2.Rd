@@ -20,5 +20,5 @@ Scaling model and variance contribution results
 Run a MIMOSA 2 analysis
 }
 \examples{
-run_mimosa2(species_file, met_file, config_file)
+run_mimosa2(config_table, species, mets)
 }

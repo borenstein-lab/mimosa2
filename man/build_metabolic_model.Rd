@@ -5,7 +5,7 @@
 \title{Build species-specific metabolic model for MIMOSA2 analysis}
 \usage{
 build_metabolic_model(species, config_table, netAdd = NULL,
-  manual_agora = F)
+  manual_agora = F, degree_filt = 0)
 }
 \arguments{
 \item{species}{Table of species/taxon abundances}
@@ -13,6 +13,10 @@ build_metabolic_model(species, config_table, netAdd = NULL,
 \item{config_table}{Data.table of input files and settings for MIMOSA}
 
 \item{netAdd}{Table of netowrk information to add to the model}
+
+\item{manual_agora}{Option to provide AGORA species directly (for simulation data)}
+
+\item{degree_filt}{Filter currency metabolites linked to more reactions than this value}
 }
 \value{
 Data.table of network model of genes and reactions for each species/taxon

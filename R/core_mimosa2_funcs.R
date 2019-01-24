@@ -10,24 +10,138 @@
 #' fit_cmp_mods(species_cmps, met_data)
 #' @export
 fit_cmp_mods = function(species_cmps, mets_melt){
-  tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
-  tot_cmps = merge(tot_cmps, mets_melt[,list(compound, Sample, value)], by = c("compound", "Sample"))
-  all_comps = tot_cmps[,unique(compound)]
-  model_dat = data.table(compound = all_comps)
-  resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
-  for(x in 1:length(all_comps)){
-    scaling_mod = try(tot_cmps[compound==all_comps[x], lm(value~V1)])
-    if(class(scaling_mod) != "try-error"){
-      scaling_coefs = coef(scaling_mod)
-      scaling_resids = resid(scaling_mod)
-      model_dat[x,Intercept:=scaling_coefs[1]]
-      model_dat[x,Slope:=scaling_coefs[2]]
-      model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
-      if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
-      resid_dat[compound==all_comps[x], Resid:=scaling_resids]
+    tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
+    tot_cmps = merge(tot_cmps, mets_melt[,list(compound, Sample, value)], by = c("compound", "Sample"))
+    all_comps = tot_cmps[,unique(compound)]
+    model_dat = data.table(compound = all_comps)
+    resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
+    for(x in 1:length(all_comps)){
+      scaling_mod = try(tot_cmps[compound==all_comps[x], lm(value~V1)])
+      if(class(scaling_mod) != "try-error"){
+        scaling_coefs = coef(scaling_mod)
+        scaling_resids = resid(scaling_mod)
+        model_dat[x,Intercept:=scaling_coefs[1]]
+        model_dat[x,Slope:=scaling_coefs[2]]
+        model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
+        if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
+        resid_dat[compound==all_comps[x], Resid:=scaling_resids]
+      }
     }
+    return(list(model_dat, resid_dat))
+}
+
+#' Fits single model scaling total CMPs to concentrations of a metabolite
+#'
+#' @import data.table
+#' @param met1 metabolite ID to fit
+#' @param cmp_rxn_dat Table of species-reaction contribution abundances
+#' @param mets_melt Table of metabolite concentrations
+#' @return lm model object
+#' @examples
+#' fit_single_scaling_mod(met1, species_cmps, met_data)
+#' @export
+fit_single_scaling_mod = function(met1, cmp_rxn_dat, mets_melt){ #For a single metabolite
+  tot_cmps = cmp_rxn_dat[compound==met1, sum(CMP), by=list(Sample, compound)]
+  tot_cmps = merge(tot_cmps, mets_melt, by = c("Sample", "compound"))
+  scaling_mod = try(tot_cmps[compound==met1, lm(value~V1)])
+  return(scaling_mod)
+}
+
+#' Greedy algorithm to test network improvements /refine rxn network
+#'
+#' @import data.table
+#' @param network Edge list reaction table (including reversibility info)
+#' @param species Table of species abundances
+#' @param mets_melt Table of metabolite concentrations
+#' @param manual_agora Whether to leave in agora/bigg format
+#' @return 
+#' @examples
+#' get_best_rxn_subset(met1, species, met_data)
+#' @export
+fit_cmp_net_edit = function(network, species, mets_melt, manual_agora = F, rsq_factor = 1.15, min_rsq = 0.1, min_rxns = 3){
+  #Get rxn cmp scores
+  species_cmps = get_species_cmp_scores(species, network, normalize = F, manual_agora = manual_agora, leave_rxns = T)[compound %in% mets_melt[,unique(compound)]]
+
+  species_cmps[,SpecRxn:=paste0(Species, "_", KO)]
+  network[,SpecRxn:=paste0(OTU, "_", KO)]
+  comp_order = mets_melt[,sd(value)/mean(value), by=compound][order(V1, decreasing = T), compound]
+  model_dat = data.table(compound = comp_order)
+  resid_dat = data.table(expand.grid(compound = comp_order, Sample = species_cmps[,unique(Sample)]))
+  all_rxns_removed = c()
+  #Go through in order of largest to smallest coefficient of variation
+  
+  for(j in 1:length(comp_order)){
+    met1 = comp_order[j]
+    print(met1)
+    cmp_dat = species_cmps[compound==met1]
+    met_net = network[Reac==met1|Prod==met1]
+    
+    if(nrow(cmp_dat)==0){ #If not actually in network (environmental metabolite or whatever)
+      next
+    }
+    uniq_rxns = cmp_dat[,unique(SpecRxn)]
+    orig_scaling_mod = fit_single_scaling_mod(met1, cmp_dat, mets_melt)
+    new_scaling_mod = orig_scaling_mod
+    new_rsq = 1
+    rsqs = rep(1, length(uniq_rxns))
+    rxns_to_keep = c()
+    rxns_to_remove = c()
+    old_rsq = ifelse(is.na(summary(orig_scaling_mod)$r.squared), 0, summary(orig_scaling_mod)$r.squared)
+    while(any(!uniq_rxns %in% rxns_to_keep) & length(uniq_rxns) > min_rxns & new_rsq > rsq_factor*old_rsq & new_rsq > min_rsq ){
+      #If new one isn't much better htan old one we're done
+      orig_scaling_mod = new_scaling_mod
+      old_rsq = ifelse(is.na(summary(orig_scaling_mod)$r.squared), 0, summary(orig_scaling_mod)$r.squared)
+      
+      #update full model
+      #print(uniq_rxns)
+      
+      all_scaling_mods = list()
+      for(k in 1:length(uniq_rxns)){
+        cmp_dat1 = cmp_dat[SpecRxn != uniq_rxns[k]]
+        all_scaling_mods[[k]] = try(fit_single_scaling_mod(met1, cmp_dat1, mets_melt))
+      }
+      slopes = sapply(all_scaling_mods, function(x){ 
+        if(class(x) != "try-error"){
+          return(x$coefficients[2])
+        } else return(0)
+      }) #Rule out changes that make this negative
+      rxns_to_keep = c(rxns_to_keep, uniq_rxns[slopes <= 0]) #Keep in rxns taht would break it if removed
+      rsqs = sapply(all_scaling_mods, function(x){ return(summary(x)$r.squared)}) #Really?
+      rxns_to_remove = c(rxns_to_remove, sample(uniq_rxns[which(rsqs==max(rsqs))], 1)) #randomly pick 1 if multiple
+      print(rxns_to_remove)
+      cmp_dat = cmp_dat[!SpecRxn %in% rxns_to_remove]
+      new_scaling_mod = fit_single_scaling_mod(met1, cmp_dat, mets_melt)
+      #print(summary(new_scaling_mod))
+      new_rsq = summary(new_scaling_mod)$r.squared
+      #Update stuff for next loop
+      met_net = met_net[!SpecRxn %in% rxns_to_remove]
+      uniq_rxns = uniq_rxns[!uniq_rxns %in% c(rxns_to_remove, rxns_to_keep)]
+      
+    }
+    #Do we recalculate CMPs now? I guess so?
+    if(length(rxns_to_remove) > 0){
+      if(any(comp_order[(j+1):length(comp_order)] %in% c(network[SpecRxn %in% rxns_to_remove,unique(Reac)],network[SpecRxn %in% rxns_to_remove,unique(Prod)]))){
+        #Recalculate only if necessary
+        species_cmps = get_species_cmp_scores(species, network[!SpecRxn %in% rxns_to_remove], normalize = F, manual_agora = T, leave_rxns = T)[compound %in% mets_melt[,unique(compound)]]
+        species_cmps[,SpecRxn:=paste0(Species, "_", KO)]
+      }
+      #Remove from full network
+      network = network[!SpecRxn %in% rxns_to_remove] 
+      all_rxns_removed = rbind(all_rxns_removed, data.table(compound = met1, Rxn = rxns_to_remove))
+    }
+    print(all_rxns_removed)
+    #Model data
+    scaling_coefs = coef(orig_scaling_mod)
+    scaling_resids = resid(orig_scaling_mod)
+    model_dat[compound==met1 ,Intercept:=scaling_coefs[1]]
+    model_dat[compound==met1, Slope:=scaling_coefs[2]]
+    model_dat[compound==met1, Rsq:=summary(orig_scaling_mod)$r.squared]
+    if(length(scaling_resids) != nrow(resid_dat[compound==met1])) stop("Missing residuals")
+    resid_dat[compound==met1, Resid:=scaling_resids]
   }
-  return(list(model_dat, resid_dat))
+  new_cmps = get_species_cmp_scores(species, network, normalize = F, manual_agora = manual_agora)
+  
+  return(list(model_dat, resid_dat, network, new_cmps))
 }
 
 #
@@ -49,16 +163,16 @@ add_residuals = function(species_cmps, model_dat, resid_dat){
   #all_comps = model_dat[!is.na(Rsq), compound]
   resid_dat[,Species:="Residual"]
   if("Resid" %in% names(resid_dat)) setnames(resid_dat, "Resid", "newValue")
-  species_cmps[,newValue:=NA]
+  species_cmps[,newValue:=-1e7] #Set column type as numeric, but want to remove NAs later 
   for(x in all_comps){
     if(!is.na(model_dat[compound==x,Slope])){
-      species_cmps[compound==x, newValue:=CMP*model_dat[compound==x, Slope]]
+      species_cmps[compound==x, newValue:=as.numeric(CMP*model_dat[compound==x, Slope])]
     } else {
       species_cmps[compound==x, newValue:=NA]
     }
     species_cmps = rbind(species_cmps, resid_dat[compound==x], fill = T)
   }
-  species_cmps = species_cmps[!is.na(newValue)]
+  species_cmps = species_cmps[newValue != -1e7 & !is.na(newValue)]
   return(species_cmps)
 }
 
@@ -128,17 +242,22 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
 #' @param varShares Dataset of contributions
 #' @param include_zeros Whether to plot taxa that do not have any contribution
 #' @param remove_resid_rescale Whether to remove the residual and rescale contributions
+#' @param met_id_col Column name with metabolite IDs
 #' @return plot of contributions
 #' @examples
 #' plot_summary_contributions(varShares)
 #' @export
-plot_summary_contributions = function(varShares, include_zeros = T, remove_resid_rescale = F){
+plot_summary_contributions = function(varShares, include_zeros = T, remove_resid_rescale = F, met_id_col = "metID"){
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
   }
-  varShares[,metID:=met_names(as.character(compound))]
-  met_order = varShares[Species=="Residual"][order(VarShare, decreasing = F), metID]
-  varShares[,metID:=factor(metID, levels = met_order)]
+  if(met_id_col == "metID" & !"metID" %in% names(varShares)){
+    varShares[,metID:=met_names(as.character(compound))]
+    met_order = varShares[Species=="Residual"][order(VarShare, decreasing = F), metID]
+    varShares[,metID:=factor(metID, levels = met_order)]
+  } else {
+    varShares[,metID:=get(met_id_col)]
+  }
   resid_dat = varShares[Species == "Residual"]
   varShares = varShares[Species != "Residual"]
   spec_order = varShares[,length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = T), Species]
@@ -155,9 +274,8 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
     theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared")
   plot1 = ggplot(varShares, aes(x=metID, y = Species2)) + geom_tile(aes_string(fill = plot_var)) + theme_minimal() +
     theme(axis.text.x = element_blank(), axis.line = element_blank(), legend.position = "bottom") +
-    scale_fill_gradientn(colours = c(brewer.pal(9,"Reds")[9], brewer.pal(9,"Reds")[8], "white",  brewer.pal(9, "Blues")[8],  brewer.pal(9, "Blues")[9]),
-                         values = scales::rescale(c(-170, -2, 0, 2, 100)), name = color_lab)  + ylab("Taxon")+
-    xlab("Metabolite")
+    scale_fill_gradient2(low = brewer.pal(9,"Reds")[9], mid = "white",  high = brewer.pal(9, "Blues")[9], midpoint = 0, name = color_lab) +
+      ylab("Taxon")+xlab("Metabolite")
   plot_all = plot_grid(resid_plot, plot1, nrow = 2, align = "v", axis = "lr", rel_heights = c(1, 2.5))
   return(plot_all)
 }
@@ -271,7 +389,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
 #' @examples
 #' build_metabolic_model(config_table)
 #' @export
-build_metabolic_model = function(species, config_table, netAdd = NULL, manual_agora = F, degree_filt = 30){
+build_metabolic_model = function(species, config_table, netAdd = NULL, manual_agora = F, degree_filt = 0){
   ### Get species to use for network if starting from seq vars
   if(!manual_agora){
     if(config_table[V1=="database", V2==get_text("database_choices")[1]]){ ### Sequence variatns
@@ -387,74 +505,80 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
 #' @param manual_agora Whether the metabolite are already specified using AGORA/BiGG (and therefore should not be mapped back to KEGG)
 #' @param humann2 Whether the species data is long-form humann2 gene-species abundances
 #' @param leave_rxns Return individual abundance/direction scores for each species and rxn
+#' @param kos_only Whether to call non-species-specific version of this function instead
 #' @return data.table of cmp scores for each taxon and compound
 #' @examples
 #' get_species_cmp_scores(species_data, network)
 #' @export
-get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F){
-  network[is.na(stoichReac), stoichReac:=0] #solve NA problem
-  network[is.na(stoichProd), stoichProd:=0]
-  network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
-  network[,stoichProd:=stoichProd*normalized_copy_number]
-  spec_list = species_table[,unique(OTU)]
-  species_table[,OTU:=as.character(OTU)]
-  network[,OTU:=as.character(OTU)]
-  if(!humann2) species_table = melt(species_table, id.var = "OTU", variable.name = "Sample") else {
-    setnames(species_table, c("Gene", "CountContributedByOTU"), c("KO", "value"))
-  }
-  species_table[,Sample:=as.character(Sample)]
-  #Convert species to relative abundance if requested
-  if(relAbund){
-    species_table[,value:=as.double(value)]
-    species_table[,value:=value/sum(value)*100, by=Sample]
-    species_table[is.nan(value), value:=0] #Just in case of all-0 samples (although this is bad for other reasons)
-  }
-  if(length(intersect(spec_list, network[,unique(OTU)]))==0) stop("All taxa missing network information, is this the correct network model?")
-  if(!all(spec_list %in% network[,unique(OTU)])) warning("Some taxa missing network information")
-  network_reacs = network[,list(OTU, KO, Reac, stoichReac)]
-  network_prods = network[,list(OTU, KO, Prod, stoichProd)]
-  network_reacs[,stoichReac:=-1*stoichReac]
-  setnames(network_reacs, c("Reac", "stoichReac"), c("compound", "stoich"))
-  setnames(network_prods, c("Prod", "stoichProd"), c("compound", "stoich"))
-  #Remove multiple-encoded things
-  setkey(network_reacs, NULL)
-  setkey(network_prods, NULL)
-  network_reacs = unique(network_reacs)
-  network_prods = unique(network_prods)
-  if(normalize){
-    network_reacs[,stoich:=as.double(stoich)]
-    network_prods[,stoich:=as.double(stoich)]
-    network_reacs[,stoich:=stoich/abs(sum(stoich)), by=list(OTU, compound)]
-    network_prods[,stoich:=stoich/sum(stoich), by=list(OTU, compound)]
-  }
-  net2 = rbind(network_reacs, network_prods, fill = T)
-  net2 = net2[!is.na(compound)] #remove NAs
-  if(!humann2) spec_cmps = merge(species_table, net2, by = "OTU", allow.cartesian = T) else {
-    spec_cmps = merge(species_table, net2, by = c("OTU", "KO"), allow.cartesian = T)
-  }
-  spec_cmps[,CMP:=value*stoich]
-  #Option to get abundance scores for each species and rxn
-  if(!leave_rxns){
-    spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound)]
-    setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))
+get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F, kos_only = F){
+  if(kos_only){
+    spec_cmps = get_cmp_scores_kos(species, network, normalize = normalize)
   } else {
-    setnames(spec_cmps, "OTU", "Species")
-  } 
-  all_comps = spec_cmps[,unique(compound)]
-  if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
-    #Convert AGORA IDs to KEGG IDs
-    spec_cmps[,KEGG:=agora_kegg_mets(compound)]
-    spec_cmps = spec_cmps[!is.na(KEGG)]
-    spec_cmps = spec_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
-    #separate internal/external?
-    setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
+    network[is.na(stoichReac), stoichReac:=0] #solve NA problem
+    network[is.na(stoichProd), stoichProd:=0]
+    network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
+    network[,stoichProd:=stoichProd*normalized_copy_number]
+    spec_list = species_table[,unique(OTU)]
+    species_table[,OTU:=as.character(OTU)]
+    network[,OTU:=as.character(OTU)]
+    if(!humann2) species_table = melt(species_table, id.var = "OTU", variable.name = "Sample") else {
+      setnames(species_table, c("Gene", "CountContributedByOTU"), c("KO", "value"))
+    }
+    species_table[,Sample:=as.character(Sample)]
+    #Convert species to relative abundance if requested
+    if(relAbund){
+      species_table[,value:=as.double(value)]
+      species_table[,value:=value/sum(value)*100, by=Sample]
+      species_table[is.nan(value), value:=0] #Just in case of all-0 samples (although this is bad for other reasons)
+    }
+    if(length(intersect(spec_list, network[,unique(OTU)]))==0) stop("All taxa missing network information, is this the correct network model?")
+    if(!all(spec_list %in% network[,unique(OTU)])) warning("Some taxa missing network information")
+    network_reacs = network[,list(OTU, KO, Reac, stoichReac)]
+    network_prods = network[,list(OTU, KO, Prod, stoichProd)]
+    network_reacs[,stoichReac:=-1*stoichReac]
+    setnames(network_reacs, c("Reac", "stoichReac"), c("compound", "stoich"))
+    setnames(network_prods, c("Prod", "stoichProd"), c("compound", "stoich"))
+    #Remove multiple-encoded things
+    setkey(network_reacs, NULL)
+    setkey(network_prods, NULL)
+    network_reacs = unique(network_reacs)
+    network_prods = unique(network_prods)
+    if(normalize){
+      network_reacs[,stoich:=as.double(stoich)]
+      network_prods[,stoich:=as.double(stoich)]
+      network_reacs[,stoich:=stoich/abs(sum(stoich)), by=list(OTU, compound)]
+      network_prods[,stoich:=stoich/sum(stoich), by=list(OTU, compound)]
+    }
+    net2 = rbind(network_reacs, network_prods, fill = T)
+    net2 = net2[!is.na(compound)] #remove NAs
+    if(!humann2) spec_cmps = merge(species_table, net2, by = "OTU", allow.cartesian = T) else {
+      spec_cmps = merge(species_table, net2, by = c("OTU", "KO"), allow.cartesian = T)
+    }
+    spec_cmps[,CMP:=value*stoich]
+    #Option to get abundance scores for each species and rxn
+    if(!leave_rxns){
+      spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound)]
+      setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))
+    } else {
+      setnames(spec_cmps, "OTU", "Species")
+    } 
+    all_comps = spec_cmps[,unique(compound)]
+    if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
+      #Convert AGORA IDs to KEGG IDs
+      spec_cmps[,KEGG:=agora_kegg_mets(compound)]
+      spec_cmps = spec_cmps[!is.na(KEGG) & grepl("[e]", compound, fixed = T)] #Going to go for just external stuff
+      spec_cmps[,compound:=NULL]
+      if(!leave_rxns){
+        spec_cmps = spec_cmps[,sum(CMP), by=list(Species, KEGG, Sample)] #Check that this makes sense
+        #separate internal/external?
+        setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
+      } else {
+        setnames(spec_cmps, "KEGG", "compound")
+      }
+    }
   }
-
   return(spec_cmps)
 }
-
-
-
 
 #' Updated version of getting all sample-level CMP scores from a KO abundance table
 #'
@@ -664,7 +788,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #' @param mets Optionally provide already-read-in metabolite data
 #' @return Scaling model and variance contribution results
 #' @examples
-#' run_mimosa2(species_file, met_file, config_file)
+#' run_mimosa2(config_table, species, mets)
 #' @export
 run_mimosa2 = function(config_table, species = "", mets = ""){
   #process arguments
@@ -680,11 +804,11 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
     mets = data_inputs$mets
   }
   if(!"manualAGORA" %in% config_table[,V1]){
-    network_results = build_metabolic_model(species, config_table)
+    network_results = build_metabolic_model(species, config_table, degree_filt = 0)
     network = network_results[[1]]
     species = network_results[[2]]
   } else {
-    network_results = build_metabolic_model(species, config_table, manual_agora = T)
+    network_results = build_metabolic_model(species, config_table, manual_agora = T, degree_filt = 0)
     network = network_results[[1]]
     species = network_results[[2]]
   }
@@ -701,15 +825,39 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
     mets = map_to_kegg(mets)
   }
+  #Get CMP scores
+  if("rxnEdit" %in% config_table[,V1]){
+    rxn_param = T
+  } else rxn_param = F
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
-    indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
-  } else if("manualAGORA" %in% config_table[,V1]){
-    indiv_cmps = get_species_cmp_scores(species, network, manual_agora = T)
+    no_spec_param = T
   } else {
-    indiv_cmps = get_species_cmp_scores(species, network)
+    no_spec_param = F
   }
+  if("manualAGORA" %in% config_table[,V1]){
+    agora_param = T
+  } else {
+    agora_param = F
+  }
+  if("revRxns" %in% config_table[,V1]){ #Whether to add reverse of reversible-annotated rxns
+    network = add_rev_rxns(network)
+  }
+  if("refine" %in% config_table[,V1]){
+    network = refine_rev_rxns(network)
+  }
+  
+  #indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
   mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
-  cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt)
+  if(rxn_param){
+    cmp_mods =  fit_cmp_net_edit(network, species, mets_melt, manual_agora = agora_param)
+    network = cmp_mods[[3]] #Revised network
+    indiv_cmps = cmp_mods[[4]]
+    #Will have to report nice summary of rxns removed, rxns direction switched, etc
+  } else {
+    indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param)
+    indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
+    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt)
+  }
   indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
   var_shares = calculate_var_shares(indiv_cmps)
   if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
@@ -811,4 +959,19 @@ map_to_kegg = function(met_table){
   met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
   setnames(met_table, "KEGG", "compound")
   return(met_table)
+}
+
+
+#' Convert metabolite name table to KEGG metabolite table
+#'
+#' @import data.table
+#' @param network Community metabolic network model
+#' @return A network with the direction of some reactions filtered
+#' @examples
+#' refine_rev_rxns(network)
+#' @export
+refine_rev_rxns = function(network){
+  if(!"Rev" %in% names(network)){
+    network2 = get_non_rev_rxns(network, all_rxns = T)
+  }
 }

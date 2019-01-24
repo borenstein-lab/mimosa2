@@ -38,7 +38,7 @@ cmp_species_contributions = function(j, cmps_sub_good, all_rxns, subjects, norm_
         vals_without = vals_without[KO %in% names(ko_net[[1]])]
         net_mod = ko_net[[1]][,which(names(ko_net[[1]]) %in% vals_without[,KO])]
         cmp_without = data.matrix(net_mod[compound,vals_without[,KO]])%*%data.matrix(vals_without[,subjects,with=F])
-        return(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(cmp_without), method="pearson"))
+        return(try(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(cmp_without), method="pearson")))
       })
       spec_cors = data.table(Species=species_involved, Cor=species_cmp_cors)
       #save KOs that have a major effect
@@ -55,7 +55,7 @@ cmp_species_contributions = function(j, cmps_sub_good, all_rxns, subjects, norm_
         vals_alone = vals_alone[KO %in% names(ko_net[[1]])]
         net_mod = ko_net[[1]][,which(names(ko_net[[1]]) %in% vals_alone[,KO])]
         cmp_alone = data.matrix(net_mod[compound,vals_alone[,KO]])%*%data.matrix(vals_alone[,subjects,with=F])
-        return(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(cmp_alone), method="pearson"))
+        return(try(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(cmp_alone), method="pearson")))
       })
       spec_cors = data.table(Species=species_involved, Cor=species_cmp_cors, compound = compound)
       spec_cors[,Pass:=ifelse(Cor > 0.5, 1, 0)]
@@ -93,7 +93,7 @@ cmp_species_contributions_picrust = function(j, cmps_sub_good, all_rxns, subject
             if(nrow(cmps_sub_good[compound]) > 1){stop("Duplicate metabolite IDs, please fix")}
             if(!is.na(single_spec_cmps[[x]])){
               if(compound %in% single_spec_cmps[[x]][,compound]){
-                return(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][compound,subjects,with=F])), method="pearson", use = "complete.obs"))
+                return(try(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][compound,subjects,with=F])), method="pearson", use = "complete.obs")))
               } else {
                 return(NA)
               }
@@ -105,7 +105,7 @@ cmp_species_contributions_picrust = function(j, cmps_sub_good, all_rxns, subject
           setkey(met_data, "compound")
           species_cmp_cors = sapply(1:length(all_taxa), function(x){
             if(!is.na(single_spec_cmps[[x]])){
-              return(cor(as.vector(unlist(met_data[compound,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][compound,subjects,with=F])), method="pearson"))
+              return(try(cor(as.vector(unlist(met_data[compound,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][compound,subjects,with=F])), method="pearson")))
             } else { return(NA)}
           })
         }

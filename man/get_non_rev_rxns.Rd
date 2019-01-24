@@ -7,12 +7,12 @@
 get_non_rev_rxns(rxn_table, all_rxns = T)
 }
 \arguments{
-\item{pvals}{Vector of p-values}
+\item{rxn_table}{Edge list}
 
-\item{method}{Must be either "fdr" or "bonferroni"}
+\item{all_rxns}{Whether to return all reactions or only 1/2 of each reversible reaction since info is redundant}
 }
 \value{
-Vector of corrected values
+Network with reversibility informatio
 }
 \description{
 Get non-reverible reactions of network.

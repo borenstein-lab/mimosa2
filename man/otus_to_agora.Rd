@@ -9,13 +9,13 @@ otus_to_agora(otus, database = "Greengenes",
   silva_file_path = "data/rep_seqs/silva_132_99_toAGORA_97_map.txt")
 }
 \arguments{
+\item{otus}{GG or SILVA OTU abundance table}
+
 \item{database}{Greengenes or SILVA}
 
 \item{gg_file_path}{File path to output of gg->agora vsearch mappings}
 
 \item{silva_file_path}{File path to output of silva->agora vsearch mappings}
-
-\item{species}{GG or SILVA OTU abundance table}
 }
 \value{
 List of AGORA species to use for model building

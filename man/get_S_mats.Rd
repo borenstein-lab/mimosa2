@@ -4,7 +4,7 @@
 \alias{get_S_mats}
 \title{Convert stoichiometric matrix to edge list of reactions}
 \usage{
-get_S_mats(all_mods, species_names, edge_list = F)
+get_S_mats(all_mods, species_names, edge_list = F, get_bounds = T)
 }
 \arguments{
 \item{all_mods}{List of Cobra-formatted metabolic models}
@@ -12,6 +12,8 @@ get_S_mats(all_mods, species_names, edge_list = F)
 \item{species_names}{List of species names for each model}
 
 \item{edge_list}{Whether to return the metabolic network as a stoichiometric matrix or edge list}
+
+\item{get_bounds}{Whether to extract information on upper and lower bound constraints (only with edge list)}
 }
 \value{
 Either a stoichiometric matrix or edge list of reactions

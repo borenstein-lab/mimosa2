@@ -5,7 +5,8 @@
 \title{Get variance share contributions to CMP scores for all compounds}
 \usage{
 var_shares_cmps(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net,
-  all_taxa, single_spec_cmps, contrib_threshold = 0.45)
+  all_taxa, single_spec_cmps, contrib_threshold = 0.45, cov_shares = F,
+  met_data = NULL)
 }
 \arguments{
 \item{cmps_sub_good}{CMP scores for metabolites with abundance data}
@@ -24,11 +25,11 @@ var_shares_cmps(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net,
 
 \item{contrib_threshold}{Threshold for binary contribution}
 
-\item{scaled_pos_contrib}{Whether to use scaled positive contributions}
-
-\item{cov}{Whether to calculate contribution to covariance with mets instead of variance (requires supplying metabolite data)}
+\item{cov_shares}{Whether to calculate contribution to covariance with mets instead of variance (requires supplying metabolite data)}
 
 \item{met_data}{Metabolite concentration data (if calculating contribution to covariance)}
+
+\item{scaled_pos_contrib}{Whether to use scaled positive contributions}
 }
 \value{
 data.table of variance contributions to CMP scores

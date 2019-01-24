@@ -55,6 +55,27 @@ humann2_format_contributions = function(path_to_humann_file, file_read = F){
   return(gene_contribs_good)
 }
 
+#' Add reverse of reversible reactions to edge list network
+#'
+#' @import data.table
+#' @param network community metabolic network model
+#' @return network with reverse of reversible reactions added, with separate reaction IDs (_1 added to ID)
+#' @examples
+#' add_rev_rxns(rxn_table)
+#' @export
+add_rev_rxns = function(network, refine = F){
+  rev_rxns = network[Rev==1]
+  #Swap
+  rev_rxns[,Reac2:=Prod]
+  rev_rxns[,Prod:=Reac]
+  rev_rxns[,Reac:=Reac2]
+  rev_rxns[,Reac2:=NULL]
+  rev_rxns[,KO:=paste0(KO, "_1")]
+  network = rbind(network, rev_rxns, fill = T)
+  return(network)
+}
+
+
 
 #' Get network distances between 2 compounds
 #'
@@ -82,13 +103,13 @@ get_net_dist = function(c1, c2, allnet, max_dist = 20){
 #' Get non-reverible reactions of network.
 #'
 #' @import data.table
-#' @param pvals Vector of p-values
-#' @param method Must be either "fdr" or "bonferroni"
-#' @return Vector of corrected values
+#' @param rxn_table Edge list
+#' @param all_rxns Whether to return all reactions or only 1/2 of each reversible reaction since info is redundant
+#' @return Network with reversibility informatio
 #' @examples
 #' get_non_rev_rxns(rxn_table)
 #' @export
-get_non_rev_rxns = function(rxn_table, all_rxns=T){ #whether to return all reactions or only 1/2 of each reversible reaction since info is redundant
+get_non_rev_rxns = function(rxn_table, all_rxns=T){ #
   if(dim(rxn_table)[1]>0){
     all_sorted= data.table(t(apply(rxn_table[,list(KO,Reac,Prod,stoichReac,stoichProd)],1,function(y){ sort(unlist(y))})))
     all_sorted[,Count:=.N,by=names(all_sorted)]
@@ -102,6 +123,7 @@ get_non_rev_rxns = function(rxn_table, all_rxns=T){ #whether to return all react
     if(all_rxns) return(rxn_table) else return(all_sorted)
   } else return(NULL)
 }
+
 
 
 #' Convert edge list network format to matrix format, including row normalization.

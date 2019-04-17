@@ -479,18 +479,39 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         # }
         ### Convert species abundances to AGORA species IDs
 
-      }  else stop("Model source option not found")
+      }  else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ ## embl_gems
+        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "embl_gems/"), repSeqFile = "all_16S_seqs.udb",
+                                 method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)],
+                                 add_agora_names = F, add_embl_names = T,
+                                 vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
+        species[,seqID:=paste0("seq", 1:nrow(species))]
+        samps = names(species)[!names(species) %in% c("OTU", "seqID")]
+        new_species = merge(species, seq_results, by = "seqID", all.x=T)
+        new_species = new_species[,lapply(.SD, sum), by=ModelID, .SDcols = samps]
+        new_species[is.na(ModelID), Model:="Other"]
+        setnames(new_species, "ModelID", "OTU")
+        mod_list = seq_results[,unique(ModelID)]
+        species = new_species
+      }else stop("Model source option not found")
     } else if(config_table[V1=="database", V2==get_text("database_choices")[2]]){ ## GG OTUs
       #Nothing to do
       if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
         mod_list = species[,OTU]
-      } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
-        species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toAGORA_97_map.txt"))
+      } else if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ ## AGORA or embl_gems
+        if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
+          species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toAGORA_97_map.txt"))
+        } else { #embl_gems - should rename this function
+          species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toRefSeq_map.txt"))
+        }
         mod_list = species[!is.na(OTU),OTU]
       } else stop('Model option not implemented')
     } else if(config_table[V1=="database", V2==get_text("database_choices")[3]]){ # SILVA
-      if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ # AGORA
-        species = otus_to_agora(species, "SILVA", silva_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99_toAGORA_97_map.txt"))
+      if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ # AGORA
+        if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
+          species = otus_to_agora(species, "SILVA", silva_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99_toAGORA_97_map.txt"))
+        } else {
+          species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_toRefSeq_map.txt"))
+        }
         mod_list = species[!is.na(OTU), OTU]
       } else stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
     }
@@ -529,7 +550,9 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
       }
     } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ #AGORA
       network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "AGORA/"))
-    } else stop('Invalid model format specified')
+    } else if (config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ #embl_gems
+      network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "embl_gems/processed/"))
+    }else stop('Invalid model format specified')
     if(!(config_table[V1=="database", V2==get_text("database_choices")[4]] & config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]])){
       #Anything other than generic KOs
       species = species[OTU %in% network[,OTU]]
@@ -956,13 +979,14 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
 #' @param file_prefix File name prefix for output
 #' @param seqID threshold for vsearch --usearch-global search
 #' @param add_agora_names Whether to add AGORA IDs to the table
+#' @param add_embl_names Whether to add RefSeq/embl_gems names to the table
 #' @param otu_tab Whether to return an OTU table, or just the matched sequences
 #' @return Table of alignment results (original sequence, hit ID)
 #' @examples
 #' map_seqvar(seqs)
 #' @export
 map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", vsearch_path = "vsearch",
-                      file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T, otu_tab = F){
+                      file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T, add_embl_names = F, otu_tab = F){
   file_prefix = paste0(file_prefix, randomString())
   seqList = DNAStringSet(seqs)
   names(seqList) = paste0("seq", 1:length(seqList))
@@ -978,6 +1002,10 @@ map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCB
     # seq_matches[,OrigSeq:=as.vector(results)[seq(1,length(results), by = 2)]]
     results = fread(paste0(repSeqDir, file_prefix, "vsearch_results.txt"), header = F)
     setnames(results, paste0("V", 1:6), c("seqID", "dbID", "matchPerc", "alnlen", "mism", "gapopens"))
+    if(add_embl_names){
+      results[,dbID:=gsub("_l.*", "", dbID)]
+    }
+
     if(results[,length(dbID), by=seqID][,any(V1 != 1)]){
       results[,max_ID:=matchPerc==max(matchPerc), by=seqID]
       results_keep = results[max_ID==T]
@@ -989,10 +1017,13 @@ map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCB
     } else {
       seq_matches = results
     }
-    if(add_agora_names){
+    if(add_agora_names & !add_embl_names){
       #seq_data = fread(paste0(repSeqDir, "agora_NCBItax_processed_nodups.txt"))
       seq_data = fread(paste0(repSeqDir, "AGORA_full_genome_info.txt"))
       seq_matches = merge(seq_matches, seq_data, by.x = "dbID", by.y = "ModelAGORA", all.x = T)
+    } else if(add_embl_names){
+      seq_data = fread(paste0(repSeqDir, "model_list_processed.txt"))
+      seq_matches = merge(seq_matches, seq_data, by.x = "dbID", by.y = "assembly_accession", all.x = T)
     }
     if(otu_tab){
       otu_table = fread(paste0(repSeqDir, file_prefix, "otu_tab.txt"))

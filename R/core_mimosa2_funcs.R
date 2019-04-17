@@ -5,24 +5,33 @@
 #' @import data.table
 #' @param species_cmps Table of species contribution abundances
 #' @param mets_melt Table of metabolite concentrations
+#' @param rank_based Whether to use Rfit instead of standard linear regression
 #' @return List of 2 data.tables - one with model summary results, one with model residuals
 #' @examples
 #' fit_cmp_mods(species_cmps, met_data)
 #' @export
-fit_cmp_mods = function(species_cmps, mets_melt){
+fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F){
     tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
     tot_cmps = merge(tot_cmps, mets_melt[,list(compound, Sample, value)], by = c("compound", "Sample"))
     all_comps = tot_cmps[,unique(compound)]
     model_dat = data.table(compound = all_comps)
     resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
     for(x in 1:length(all_comps)){
-      scaling_mod = try(tot_cmps[compound==all_comps[x], lm(value~V1)])
+      if(!rank_based){
+        scaling_mod = try(tot_cmps[compound==all_comps[x], lm(value~V1)])
+      } else {
+        scaling_mod = try(tot_cmps[compound==all_comps[x], Rfit::rfit(value~V1)])
+      }
       if(class(scaling_mod) != "try-error"){
         scaling_coefs = coef(scaling_mod)
         scaling_resids = resid(scaling_mod)
         model_dat[x,Intercept:=scaling_coefs[1]]
         model_dat[x,Slope:=scaling_coefs[2]]
-        model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
+        if(!rank_based){
+          model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
+        } else {
+          model_dat[x,Rsq:=try(Rfit::summary.rfit(scaling_mod, overall.test = "drop")$R2)]
+        }
         if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
         resid_dat[compound==all_comps[x], Resid:=scaling_resids]
       }
@@ -36,14 +45,19 @@ fit_cmp_mods = function(species_cmps, mets_melt){
 #' @param met1 metabolite ID to fit
 #' @param cmp_rxn_dat Table of species-reaction contribution abundances
 #' @param mets_melt Table of metabolite concentrations
+#' @param rank_based Whether to use rfit instead of lm
 #' @return lm model object
 #' @examples
 #' fit_single_scaling_mod(met1, species_cmps, met_data)
 #' @export
-fit_single_scaling_mod = function(met1, cmp_rxn_dat, mets_melt){ #For a single metabolite
+fit_single_scaling_mod = function(met1, cmp_rxn_dat, mets_melt, rank_based = F){ #For a single metabolite
   tot_cmps = cmp_rxn_dat[compound==met1, sum(CMP), by=list(Sample, compound)]
   tot_cmps = merge(tot_cmps, mets_melt, by = c("Sample", "compound"))
-  scaling_mod = try(tot_cmps[compound==met1, lm(value~V1)])
+  if(rank_based == F){
+    scaling_mod = try(tot_cmps[compound==met1, lm(value~V1)])
+  } else {
+    scaling_mod = try(tot_cmps[compound==met1, Rfit::rfit(value~V1)])
+  }
   return(scaling_mod)
 }
 
@@ -54,16 +68,29 @@ fit_single_scaling_mod = function(met1, cmp_rxn_dat, mets_melt){ #For a single m
 #' @param species Table of species abundances
 #' @param mets_melt Table of metabolite concentrations
 #' @param manual_agora Whether to leave in agora/bigg format
+#' @param rsq_factor Improvement in R squared needed to keep going
+#' @param min_rsq Minimum r squared needed to accept an improvement
+#' @param min_rxns Minimum number of reactions remaining to continue iterating
+#' @param max_rxns Maximum number of reactions to try
+#' @param rank_based Whether to use rank-based regression
+#' @param species_specific Whether to adjust rxns in a species-specific or whole-community manner
 #' @return
 #' @examples
 #' get_best_rxn_subset(met1, species, met_data)
 #' @export
-fit_cmp_net_edit = function(network, species, mets_melt, manual_agora = F, rsq_factor = 1.15, min_rsq = 0.1, min_rxns = 3, max_rxns_test = 40){
+fit_cmp_net_edit = function(network, species, mets_melt, manual_agora = F, rsq_factor = 1.15, min_rsq = 0.1, min_rxns = 3, max_rxns_test = 40, rank_based = F, species_specific = T){
   #Get rxn cmp scores
   species_cmps = get_species_cmp_scores(species, network, normalize = F, manual_agora = manual_agora, leave_rxns = T)[compound %in% mets_melt[,unique(compound)]]
-
-  species_cmps[,SpecRxn:=paste0(Species, "_", KO)]
-  network[,SpecRxn:=paste0(OTU, "_", KO)]
+  if(species_specific){
+    species_cmps[,SpecRxn:=paste0(Species, "_", KO)]
+    network[,SpecRxn:=paste0(OTU, "_", KO)]
+    rxn_var = "SpecRxn"
+  } else {
+    rxn_var = "KO"
+    species_cmps = species_cmps[,sum(CMP), by=list(Sample, KO, compound)]
+    setnames(species_cmps, "V1", "CMP")
+  }
+  print(rxn_var)
   comp_order = mets_melt[,sd(value)/mean(value), by=compound][order(V1, decreasing = T), compound]
   model_dat = data.table(compound = comp_order)
   resid_dat = data.table(expand.grid(compound = comp_order, Sample = species_cmps[,unique(Sample)]))
@@ -79,48 +106,73 @@ fit_cmp_net_edit = function(network, species, mets_melt, manual_agora = F, rsq_f
     if(nrow(cmp_dat)==0){ #If not actually in network (environmental metabolite or whatever)
       next
     }
-    uniq_rxns = cmp_dat[,unique(SpecRxn)]
+    uniq_rxns = cmp_dat[,unique(get(rxn_var))]
     print(length(uniq_rxns))
     if(length(uniq_rxns) > max_rxns_test){ #Only test most variable
-      rxn_var = cmp_dat[,var(CMP), by=SpecRxn]
-      uniq_rxns = rxn_var[order(V1, decreasing = T)][1:max_rxns_test, SpecRxn]
+      rxn_vary = cmp_dat[,var(CMP), by=rxn_var]
+      uniq_rxns = rxn_vary[order(V1, decreasing = T)][1:max_rxns_test, get(rxn_var)]
     }
-    orig_scaling_mod = fit_single_scaling_mod(met1, cmp_dat, mets_melt)
+    orig_scaling_mod = fit_single_scaling_mod(met1, cmp_dat, mets_melt, rank_based = rank_based)
     new_scaling_mod = orig_scaling_mod
     new_rsq = 1
+    new_slope = coef(new_scaling_mod)[2]
     rsqs = rep(1, length(uniq_rxns))
     rxns_to_keep = c()
     rxns_to_remove = c()
     old_rsq = ifelse(is.na(summary(orig_scaling_mod)$r.squared), 0, summary(orig_scaling_mod)$r.squared)
-    while(any(!uniq_rxns %in% rxns_to_keep) & length(uniq_rxns) > min_rxns & new_rsq > rsq_factor*old_rsq & new_rsq > min_rsq ){
+    old_slope = coef(orig_scaling_mod)[2]
+    if(is.na(old_slope)| length(old_slope)==0){ old_slope = 0}
+    while(any(!uniq_rxns %in% rxns_to_keep) & ((length(uniq_rxns) > min_rxns & new_rsq > rsq_factor*old_rsq & new_rsq > min_rsq )|(old_slope < 0 & new_slope < 0))){
       #If new one isn't much better htan old one we're done
       orig_scaling_mod = new_scaling_mod
       old_rsq = ifelse(is.na(summary(orig_scaling_mod)$r.squared), 0, summary(orig_scaling_mod)$r.squared)
+      old_slope = coef(orig_scaling_mod)[2]
+      if(is.na(old_slope)| length(old_slope)==0){ old_slope = 0}
 
       #update full model
       #print(uniq_rxns)
 
       all_scaling_mods = list()
       for(k in 1:length(uniq_rxns)){
-        cmp_dat1 = cmp_dat[SpecRxn != uniq_rxns[k]]
-        all_scaling_mods[[k]] = try(fit_single_scaling_mod(met1, cmp_dat1, mets_melt))
+        cmp_dat1 = cmp_dat[get(rxn_var) != uniq_rxns[k]]
+        all_scaling_mods[[k]] = try(fit_single_scaling_mod(met1, cmp_dat1, mets_melt, rank_based = rank_based))
       }
       slopes = sapply(all_scaling_mods, function(x){
         if(class(x) != "try-error"){
           return(x$coefficients[2])
         } else return(0)
-      }) #Rule out changes that make this negative
-      rxns_to_keep = c(rxns_to_keep, uniq_rxns[slopes <= 0]) #Keep in rxns taht would break it if removed
-      rsqs = sapply(all_scaling_mods, function(x){ return(summary(x)$r.squared)}) #Really?
-      rxns_to_remove = c(rxns_to_remove, sample(uniq_rxns[which(rsqs==max(rsqs))], 1)) #randomly pick 1 if multiple
-      print(rxns_to_remove)
-      cmp_dat = cmp_dat[!SpecRxn %in% rxns_to_remove]
-      new_scaling_mod = fit_single_scaling_mod(met1, cmp_dat, mets_melt)
-      #print(summary(new_scaling_mod))
-      new_rsq = summary(new_scaling_mod)$r.squared
-      #Update stuff for next loop
-      met_net = met_net[!SpecRxn %in% rxns_to_remove]
-      uniq_rxns = uniq_rxns[!uniq_rxns %in% c(rxns_to_remove, rxns_to_keep)]
+      }) #Rule out changes that make this negative - oh - this isn't working
+      rsqs = sapply(all_scaling_mods, function(x){ 
+        if(class(x) != "try-error"){
+        return(summary(x)$r.squared)} else {
+          return(NA)
+        }
+        }) #Really?
+      if(old_slope > 0 & length(rsqs[!is.na(rsqs)]) > 0){
+        rxns_to_keep = c(rxns_to_keep, uniq_rxns[slopes <= 0]) #Keep in rxns taht would break it if removed
+        rxns_to_remove = c(rxns_to_remove, sample(uniq_rxns[which(rsqs==max(rsqs, na.rm = T))], 1)) #randomly pick 1 if multiple
+        print(rxns_to_remove)
+        cmp_dat = cmp_dat[!SpecRxn %in% rxns_to_remove]
+        new_scaling_mod = fit_single_scaling_mod(met1, cmp_dat, mets_melt, rank_based = rank_based)
+        #print(summary(new_scaling_mod))
+        new_rsq = summary(new_scaling_mod)$r.squared
+        #Update stuff for next loop
+        met_net = met_net[!SpecRxn %in% rxns_to_remove]
+        uniq_rxns = uniq_rxns[!uniq_rxns %in% c(rxns_to_remove, rxns_to_keep)]
+      } else {
+        if(any(slopes[!is.na(slopes)] > 0)){
+          rxns_to_remove = c(rxns_to_remove, sample(uniq_rxns[which(slopes > 0 & rsqs==max(rsqs[slopes > 0], na.rm = T))], 1))
+          cmp_dat = cmp_dat[!SpecRxn %in% rxns_to_remove]
+          new_scaling_mod = fit_single_scaling_mod(met1, cmp_dat, mets_melt, rank_based = rank_based)
+          #print(summary(new_scaling_mod))
+          new_rsq = summary(new_scaling_mod)$r.squared
+          #Update stuff for next loop
+          met_net = met_net[!SpecRxn %in% rxns_to_remove]
+          uniq_rxns = uniq_rxns[!uniq_rxns %in% c(rxns_to_remove, rxns_to_keep)]
+        } else { #give up?
+          break
+        }
+      }
 
     }
     #Do we recalculate CMPs now? I guess so?
@@ -517,7 +569,8 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
 #' @export
 get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F, kos_only = F){
   if(kos_only){
-    spec_cmps = get_cmp_scores_kos(species, network, normalize = normalize)
+    spec_cmps = get_cmp_scores_kos(species_table, network, normalize = normalize)
+    return(spec_cmps)
   } else {
     network[is.na(stoichReac), stoichReac:=0] #solve NA problem
     network[is.na(stoichProd), stoichProd:=0]
@@ -579,6 +632,11 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
         setnames(spec_cmps, c("KEGG", "V1"), c("compound", "CMP"))
       } else {
         setnames(spec_cmps, "KEGG", "compound")
+        #Remove all-0 rxns
+        spec_cmps[,SpecRxn:=paste0(Species, "_", KO)]
+        bad_specRxn = spec_cmps[,length(CMP[CMP != 0]), by=SpecRxn][V1==0, SpecRxn]
+        spec_cmps = spec_cmps[!SpecRxn %in% bad_specRxn]
+        spec_cmps[,SpecRxn:=NULL]
       }
     }
   }
@@ -776,7 +834,10 @@ check_config_table = function(config_table, data_path = "data/", app = F){
       req_params[req_params=="file1"] = "metagenome"
     }
   }
-  if(any(!req_params %in% config_table[,V1])) stop("Required parameters missing from configuration file")
+  if(any(!req_params %in% config_table[,V1])){
+    missing_param = req_params[!req_params %in% config_table[,V1]]
+    stop(paste0("Required parameters missing from configuration file: ", missing_param, "\n"))
+  } 
   all_params = c(req_params, "metagenome","contribType", "gapfill", "metType", "netAdd", "simThreshold", "kegg_prefix", "data_prefix") #Move to package sysdata?
   config_table[V2=="", V2:=FALSE]
   if(length(all_params[!all_params %in% config_table[,V1]]) > 0){
@@ -865,11 +926,13 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   }
   indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
   var_shares = calculate_var_shares(indiv_cmps)
-  if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
+  var_shares = merge(var_shares, cmp_mods[[1]], by = "compound", all.x = T)
+  if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){ #if we have a metagenome as well as 16s
     indiv_cmps2 = get_cmp_scores_kos(species, metagenome_network)
     cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt)
     indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
     var_shares_metagenome = calculate_var_shares(indiv_cmps2)
+    var_shares_metagenome = merge(var_shares_metagenome, cmp_mods2[[1]], by = "compound", all.x = T)
     return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
   } else {
     return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network))

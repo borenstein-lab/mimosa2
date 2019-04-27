@@ -273,14 +273,25 @@ generate_genomic_network = function(kos, keggSource = "KeggTemplate", degree_fil
     if(return_mats){
       network_mat = matrix(rep(0), nrow = length(cmpds), ncol = length(goodkos))
       stoich_mat = matrix(rep(NA), nrow = length(cmpds), ncol = length(goodkos))
-      for(j in 1:length(rxn_table[,KO])){
-        foo1 = match(rxn_table[j,Reac], cmpds)
-        foo2 = match(rxn_table[j,Prod], cmpds)
-        fooko = match(rxn_table[j,KO], goodkos)
-        network_mat[foo1, fooko] = network_mat[foo1, fooko] - rxn_table[j,stoichReac]
-        network_mat[foo2, fooko] = network_mat[foo2, fooko] + rxn_table[j, stoichProd]
-        if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
-        if(is.na(stoich_mat[foo2,fooko])) stoich_mat[foo2,fooko] = 1*rxn_table[j,stoichProd] else stoich_mat[foo2,fooko] = stoich_mat[foo2, fooko] + rxn_table[j,stoichProd] ##Luckily this doesn't affect anything
+      rxn_table = get_non_rev_rxns(rxn_table, by_species = F)
+      net_prods = unique(rxn_table[Reversible==0,list(KO, Prod, stoichProd)])
+      net_reacs = unique(rxn_table[Reversible==0,list(KO, Reac, stoichReac)])
+      
+      for(j in 1:length(net_prods[,KO])){
+        foo2 = match(net_prods[j,Prod], cmpds)
+        fooko = match(net_prods[j,KO], goodkos)
+        #network_mat[foo1, fooko] = network_mat[foo1, fooko] - rxn_table[j,stoichReac]
+        network_mat[foo2, fooko] = network_mat[foo2, fooko] + net_prods[j, stoichProd]
+        #if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
+        if(is.na(stoich_mat[foo2,fooko])) stoich_mat[foo2,fooko] = 1*net_prods[j,stoichProd] else stoich_mat[foo2,fooko] = stoich_mat[foo2, fooko] + net_prods[j,stoichProd] ##Luckily this doesn't affect anything
+      }
+      for(j in 1:length(net_reacs[,KO])){
+        foo1 = match(net_reacs[j,Reac], cmpds)
+        fooko = match(net_reacs[j,KO], goodkos)
+        network_mat[foo1, fooko] = network_mat[foo1, fooko] - net_reacs[j, stoichReac]
+        #if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
+        if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*net_reacs[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - net_reacs[j,stoichReac] ##Luckily this doesn't affect anything
+        
       }
       if(normalize){
         if(length(cmpds) > 1 & length(goodkos) > 1){
@@ -475,7 +486,7 @@ get_cmp_scores = function(emm, norm_kos){
   emm = emm[,match(norm_kos_sub[,KO], names(emm)), drop = F]
   if(all(names(emm)==norm_kos_sub[,KO])){
     for(m in 1:nsamp){
-      cmp[,m] =  as.matrix(emm) %*% unlist(norm_kos_sub[,subjects[m],with=F])
+      cmp[,m] =  1000*as.matrix(emm) %*% unlist(norm_kos_sub[,subjects[m],with=F])
     }
   }else if(all(sort(names(emm))==sort(norm_kos_sub[,KO]))){ #Just out of order
     emm = emm[,order(names(emm))]
@@ -538,6 +549,7 @@ make_pairwise_met_matrix = function(metabolite, met_mat, diff_function = "differ
 #' @param nperm Number of permutations for Mantel test, default is 20000
 #' @param nonzero_filter Minimum number of samples required to have nonzero concentrations and nonzero metabolic potential scores in order for metabolite to be evaluated, default is 3
 #' @param norm Whether to normalize the network model coefficients by the total number of synthesis and degradation reactions for each metabolite
+#' @param save_out Whether to save output
 #' @return No return, writes output to files.
 #' @examples
 #'
@@ -545,7 +557,7 @@ make_pairwise_met_matrix = function(metabolite, met_mat, diff_function = "differ
 run_all_metabolites = function(genes, mets, file_prefix = 'net1', correction = "fdr", cutoff = 0.1,
                                net_method = "load", rxn_table_source = "", id_met = F, met_id_file = '',
                                degree_filter = 0, minpath_file = '', cor_method = "spearman",
-                               net_file = "", nperm = 20000, nonzero_filter=3, norm = T){
+                               net_file = "", nperm = 20000, nonzero_filter=3, norm = T, save_out = T){
   #must be data.tables keyed by KOs/KEGG IDs in first column, all other columns are subject IDs
   #correction must be either "bonferroni" or "fdr", cutoff is q value cutoff
   #id_mets specifies whether to use network for improved metabolite identification (i.e. for Braun datasets)
@@ -622,8 +634,8 @@ run_all_metabolites = function(genes, mets, file_prefix = 'net1', correction = "
   write.table(signif_pos, file = paste(file_prefix,'_signifPos.txt',sep = ''), sep = "\t", quote = F, row.names = F)
   write.table(signif_neg, file = paste(file_prefix,'_signifNeg.txt',sep = ''), sep = "\t", quote = F, row.names = F)
   write.table(cmp_mat, file = paste0(file_prefix, '_cmpAll.txt'), quote=F, row.names = F, sep = "\t")
-  save(norm_kos, mets, ko_net, all_comparisons, node_data, file = paste(file_prefix,'_out.rda',sep=''))
-  return(NULL)
+  if(save_out) save(norm_kos, mets, ko_net, all_comparisons, node_data, file = paste(file_prefix,'_out.rda',sep=''))
+  return(list(norm_kos, mets, ko_net, all_comparisons, node_data, cmp_mat))
 }
 
 

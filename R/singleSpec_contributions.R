@@ -209,13 +209,18 @@ var_shares_cmps = function(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net, 
 #' @export
 single_spec_musicc = function(contribs){
   ##Get OTU abundances from single-copy contribs for consistency
-  otus = contribs[GeneCountPerGenome == 1, list(OTU, Sample, CountContributedByOTU)]
-  setkey(otus, NULL)
-  otus = unique(otus)
-  otus[,OTURelAbund:=CountContributedByOTU/sum(CountContributedByOTU), by = Sample]
-  otus[,CountContributedByOTU:=NULL]
-  all_samps = unique(contribs[,Sample])
-  contribs = merge(contribs, otus, by=c("OTU", "Sample"), all.x=T)
+  #otus = contribs[GeneCountPerGenome == 1, list(OTU, Sample, CountContributedByOTU)]
+  #setkey(otus, NULL)
+  #otus = unique(otus)
+  #otus[,OTURelAbund:=CountContributedByOTU/sum(CountContributedByOTU), by = Sample]
+  #otus[,CountContributedByOTU:=NULL]
+  #all_samps = unique(contribs[,Sample])
+  contribs[,OTUAbund:=CountContributedByOTU/GeneCountPerGenome]
+  otu_abunds = contribs[,list(Sample, OTU, OTUAbund)]
+  #Get single line per OTU-sample
+  otu_abunds = otu_abunds[,mean(OTUAbund), by=list(Sample, OTU)]
+  otu_abunds[,OTURelAbund:=V1/sum(V1), by=Sample] #Ok, now this is back to original if that's what's provided
+  contribs = merge(contribs, otu_abunds[,list(Sample, OTU, OTURelAbund)], by=c("OTU", "Sample"), all.x=T)
   all_otus = sort(unique(contribs[,OTU]))
   #cat(all_otus)
   all_koAbunds_byOTU = vector("list", length(all_otus))
@@ -351,11 +356,12 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
 #' @param met_data Optional, metabolite concentration table if comparison = "mets"
 #' @param var_share If selected, will calculate variance share contributions instead of correlations
 #' @param cov_share If selected, will calculate covariance share contributions instead of correlations (cannot select both var and cov). Must provide metabolite concentration data.
+#' @param alreadyNormalized Don't re-normalize contribution table at all
 #' @return table of species, metabolites, whether that species is a contributor for that metabolite and the correlation strength
 #' @examples
 #' read_files(gene_file, met_file)
 #' @export
-get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, otu_id = "all", otu_file, valueVar = "singleMusicc", sum_to_genus, write_out = T, comparison = "cmps", met_data = "", taxonomy_file = "", var_share = F, cov_share = F){
+get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, otu_id = "all", otu_file, valueVar = "singleMusicc", sum_to_genus, write_out = T, comparison = "cmps", met_data = "", taxonomy_file = "", var_share = F, cov_share = F, alreadyNormalized = F){
   #devtools::load_all()
   if(!valueVar %in% c("RelAbundSample", "singleMusicc")) stop("Invalid abundance metric, must be RelAbundSample or singleMusicc")
   if(!data.table::is.data.table(contrib_file)){ #Allow supplying the contrib table directly
@@ -367,7 +373,7 @@ get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, o
   all_otus = sort(unique(contribs[,OTU]))
     if(valueVar == "RelAbundSample"){ #Using relative abundance out of all genes
       valueVar = "RelAbundSample"
-      contribs = make_unnormalized_single_spec(contribs, otu_id, out_prefix)
+      if(!alreadyNormalized) contribs = make_unnormalized_single_spec(contribs, otu_id, out_prefix)
       if(sum_to_genus){
         if(taxonomy_file == "") stop("Must provide taxonomy file") else {
           taxonomy = fread(taxonomy_file, fill = T) #In case of blank taxa
@@ -378,7 +384,7 @@ get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, o
       }
       all_koAbunds_byOTU = contribs_by_species_list(contribs, valueVar = valueVar, out_prefix, write_out)
     } else if(valueVar == "singleMusicc"){
-      contribs = single_spec_musicc(contribs)
+      if(!alreadyNormalized) contribs = single_spec_musicc(contribs)
       if(sum_to_genus){
         if(taxonomy_file == "") stop("Must provide taxonomy file") else {
           taxonomy = fread(taxonomy_file)

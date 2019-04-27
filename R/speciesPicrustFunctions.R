@@ -236,7 +236,8 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
   contribution_table[,contribution := (abundance * copy_number) / norm_factor]
 
   if(copynum_column){
-    contribution_table = contribution_table[,list(Sample, OTU, Gene, contribution, copy_number)]
+    contribution_table = contribution_table[,list(Sample, OTU, Gene, contribution, copy_number/norm_factor)]
+    setnames(contribution_table, "V5", "copy_number")
   } else {
     contribution_table = contribution_table[,list(Sample, OTU, Gene, contribution)]
   } 

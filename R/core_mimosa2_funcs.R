@@ -586,19 +586,18 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
 #' @param humann2 Whether the species data is long-form humann2 gene-species abundances
 #' @param leave_rxns Return individual abundance/direction scores for each species and rxn
 #' @param kos_only Whether to call non-species-specific version of this function instead
+#' @param remove_rev Whether to remove reversible reactions before calculating anything
 #' @return data.table of cmp scores for each taxon and compound
 #' @examples
 #' get_species_cmp_scores(species_data, network)
 #' @export
-get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F, kos_only = F){
+get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F, kos_only = F, remove_rev = T){
   if(kos_only){
     spec_cmps = get_cmp_scores_kos(species_table, network, normalize = normalize)
     return(spec_cmps)
   } else {
     network[is.na(stoichReac), stoichReac:=0] #solve NA problem
     network[is.na(stoichProd), stoichProd:=0]
-    network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
-    network[,stoichProd:=stoichProd*normalized_copy_number]
     spec_list = species_table[,unique(OTU)]
     species_table[,OTU:=as.character(OTU)]
     network[,OTU:=as.character(OTU)]
@@ -609,13 +608,17 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     #Convert species to relative abundance if requested
     if(relAbund){
       species_table[,value:=as.double(value)]
-      species_table[,value:=value/sum(value)*100, by=Sample]
+      species_table[,value:=1000*value/sum(value), by=Sample]
       species_table[is.nan(value), value:=0] #Just in case of all-0 samples (although this is bad for other reasons)
     }
     if(length(intersect(spec_list, network[,unique(OTU)]))==0) stop("All taxa missing network information, is this the correct network model?")
     if(!all(spec_list %in% network[,unique(OTU)])) warning("Some taxa missing network information")
-    network_reacs = network[,list(OTU, KO, Reac, stoichReac)]
-    network_prods = network[,list(OTU, KO, Prod, stoichProd)]
+    if(remove_rev){ #Remove reversible reactions
+      network = get_non_rev_rxns(network, all_rxns = T, by_species = T)
+      network = network[Reversible==0]
+    }
+    network_reacs = network[,list(OTU, KO, Reac, stoichReac, normalized_copy_number)]
+    network_prods = network[,list(OTU, KO, Prod, stoichProd, normalized_copy_number)]
     network_reacs[,stoichReac:=-1*stoichReac]
     setnames(network_reacs, c("Reac", "stoichReac"), c("compound", "stoich"))
     setnames(network_prods, c("Prod", "stoichProd"), c("compound", "stoich"))
@@ -624,6 +627,8 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     setkey(network_prods, NULL)
     network_reacs = unique(network_reacs)
     network_prods = unique(network_prods)
+    # network_reacs[,stoich:=stoich*normalized_copy_number] #Add in copy num/16S normalization factor
+    # network_prods[,stoich:=stoich*normalized_copy_number] #Add in copy num/16S normalization factor
     if(normalize){
       network_reacs[,stoich:=as.double(stoich)]
       network_prods[,stoich:=as.double(stoich)]
@@ -632,16 +637,27 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     }
     net2 = rbind(network_reacs, network_prods, fill = T)
     net2 = net2[!is.na(compound)] #remove NAs
+    net2[,stoich:=stoich*normalized_copy_number] #Add in copy num/16S normalization factor
+    #network[,stoichProd:=stoichProd*normalized_copy_number] #I don't think this behaves exactly the saem as multiplying later
+    
     if(!humann2) spec_cmps = merge(species_table, net2, by = "OTU", allow.cartesian = T) else {
       spec_cmps = merge(species_table, net2, by = c("OTU", "KO"), allow.cartesian = T)
     }
     spec_cmps[,CMP:=value*stoich]
     #Option to get abundance scores for each species and rxn
     if(!leave_rxns){
-      spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound)]
+      spec_cmps = spec_cmps[,sum(CMP), by=list(OTU, Sample, compound, value)]
+      #spec_cmps[abs(CMP) < 10e-16 & abs(CMP) > 0, CMP:=0]
+      #spec_cmps[stoich/value < 10e-]
+      #Get rid of tiny values from stoich matrix errors combining synth/deg
       setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))
+      spec_cmps[abs(CMP)/value < 10e-15, CMP:=0]
     } else {
       setnames(spec_cmps, "OTU", "Species")
+      spec_cmps[,SpecRxn:=paste0(Species, "_", KO)]
+      bad_specRxn = spec_cmps[,length(CMP[CMP != 0]), by=SpecRxn][V1==0, SpecRxn]
+      spec_cmps = spec_cmps[!SpecRxn %in% bad_specRxn]
+      spec_cmps[,SpecRxn:=NULL]
     }
     all_comps = spec_cmps[,unique(compound)]
     if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
@@ -672,11 +688,12 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
 #' @param ko_table KO abundance table (wide format)
 #' @param network Species-specific network table, product of build_network functions
 #' @param normalize Whether to normalize rows when making the network EMM
+#' @param remove_rev Whether to remove rev rxns before calculating/normalizing
 #' @return data.table of cmp scores for each taxon and compound
 #' @examples
 #' get_cmp_scores_kos(ko_data, network)
 #' @export
-get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T){
+get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, remove_rev = T){
   network[is.na(stoichReac), stoichReac:=0] #solve NA problem
   network[is.na(stoichProd), stoichProd:=0]
   #network[,stoichReac:=stoichReac*normalized_copy_number] #Add in copy num/16S normalization factor
@@ -685,7 +702,11 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T){
   ko_table_melt[,Sample:=as.character(Sample)]
   if(relAbund){
     ko_table_melt[,value:=as.double(value)]
-    ko_table_melt[,value:=value/sum(value)*100, by=Sample]
+    ko_table_melt[,value:=value/sum(value)*1000, by=Sample]
+  }
+  if(remove_rev){ #Remove reversible reactions
+    network = get_non_rev_rxns(network, all_rxns = T)
+    network = network[Reversible==0]
   }
   network_reacs = network[,list(KO, Reac, stoichReac)]
   network_prods = network[,list(KO, Prod, stoichProd)]

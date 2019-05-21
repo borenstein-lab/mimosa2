@@ -4,12 +4,14 @@
 \alias{get_non_rev_rxns}
 \title{Get non-reverible reactions of network.}
 \usage{
-get_non_rev_rxns(rxn_table, all_rxns = T)
+get_non_rev_rxns(rxn_table, all_rxns = T, by_species = T)
 }
 \arguments{
 \item{rxn_table}{Edge list}
 
 \item{all_rxns}{Whether to return all reactions or only 1/2 of each reversible reaction since info is redundant}
+
+\item{by_species}{Whether this is a species-specific network}
 }
 \value{
 Network with reversibility informatio

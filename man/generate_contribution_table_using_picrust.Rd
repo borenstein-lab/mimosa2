@@ -6,7 +6,7 @@
 \usage{
 generate_contribution_table_using_picrust(otu_table, picrust_norm_file,
   picrust_ko_table_directory, picrust_ko_table_suffix,
-  copynum_column = F)
+  copynum_column = F, otu_rel_abund = T)
 }
 \arguments{
 \item{otu_table}{OTU/seq table}
@@ -18,6 +18,8 @@ generate_contribution_table_using_picrust(otu_table, picrust_norm_file,
 \item{picrust_ko_table_suffix}{File naming of PICRUSt genome OTU predictions}
 
 \item{copynum_column}{Whether to include a copy number column in the contribution table}
+
+\item{otu_rel_abund}{Whether to convert OTU table to relative abundances first}
 }
 \value{
 Table of PICRUSt-based contribution abundances for all OTUs

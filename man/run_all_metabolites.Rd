@@ -8,7 +8,8 @@ run_all_metabolites(genes, mets, file_prefix = "net1",
   correction = "fdr", cutoff = 0.1, net_method = "load",
   rxn_table_source = "", id_met = F, met_id_file = "",
   degree_filter = 0, minpath_file = "", cor_method = "spearman",
-  net_file = "", nperm = 20000, nonzero_filter = 3, norm = T)
+  net_file = "", nperm = 20000, nonzero_filter = 3, norm = T,
+  save_out = T)
 }
 \arguments{
 \item{genes}{Gene abundances}
@@ -40,6 +41,8 @@ run_all_metabolites(genes, mets, file_prefix = "net1",
 \item{nonzero_filter}{Minimum number of samples required to have nonzero concentrations and nonzero metabolic potential scores in order for metabolite to be evaluated, default is 3}
 
 \item{norm}{Whether to normalize the network model coefficients by the total number of synthesis and degradation reactions for each metabolite}
+
+\item{save_out}{Whether to save output}
 }
 \value{
 No return, writes output to files.

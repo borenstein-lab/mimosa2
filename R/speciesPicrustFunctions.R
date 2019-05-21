@@ -202,16 +202,19 @@ get_subset_picrust_ko_table = function(otus, picrust_ko_table_directory, picrust
 #' @param picrust_ko_table_directory Directory of PICRUSt genome OTU predictions
 #' @param picrust_ko_table_suffix File naming of PICRUSt genome OTU predictions
 #' @param copynum_column Whether to include a copy number column in the contribution table
+#' @param otu_rel_abund Whether to convert OTU table to relative abundances first
 #' @return Table of PICRUSt-based contribution abundances for all OTUs
 #' @examples
 #' generate_contribution_table_using_picrust(otu_table, picrust_norm_file, picrust_dir, picrust_suffix)
 #' @export
-generate_contribution_table_using_picrust = function(otu_table, picrust_norm_file, picrust_ko_table_directory, picrust_ko_table_suffix, copynum_column = F){
+generate_contribution_table_using_picrust = function(otu_table, picrust_norm_file, picrust_ko_table_directory, picrust_ko_table_suffix, copynum_column = F, otu_rel_abund = T){
 
   #Melt table and convert to relative abundances
   otu_table = melt(otu_table, id.var = "OTU", value.name = "abundance", variable.name = "Sample")
   otu_table[,abundance:=as.numeric(abundance)]
-  otu_table[,abundance:=abundance/sum(abundance), by=Sample]
+  if(otu_rel_abund){
+    otu_table[,abundance:=abundance/sum(abundance), by=Sample]
+  }
   otu_table[,OTU:=as.character(OTU)]
   #otu_table = data.table(OTU = otu_table[,as.character(OTU)], otu_table[,lapply(.SD, function(x){ return(x/sum(x))}), .SDcols = names(otu_table)[names(otu_table) != "OTU"]])
 

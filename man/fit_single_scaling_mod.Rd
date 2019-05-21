@@ -4,7 +4,7 @@
 \alias{fit_single_scaling_mod}
 \title{Fits single model scaling total CMPs to concentrations of a metabolite}
 \usage{
-fit_single_scaling_mod(met1, cmp_rxn_dat, mets_melt)
+fit_single_scaling_mod(met1, cmp_rxn_dat, mets_melt, rank_based = F)
 }
 \arguments{
 \item{met1}{metabolite ID to fit}
@@ -12,6 +12,8 @@ fit_single_scaling_mod(met1, cmp_rxn_dat, mets_melt)
 \item{cmp_rxn_dat}{Table of species-reaction contribution abundances}
 
 \item{mets_melt}{Table of metabolite concentrations}
+
+\item{rank_based}{Whether to use rfit instead of lm}
 }
 \value{
 lm model object

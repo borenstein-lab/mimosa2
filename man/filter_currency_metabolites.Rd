@@ -2,7 +2,7 @@
 % Please edit documentation in R/core_functions.R
 \name{filter_currency_metabolites}
 \alias{filter_currency_metabolites}
-\title{Create a community metabolic network model using a few different methods.}
+\title{Remove metabolites linked to many reactions from a metabolic network.}
 \usage{
 filter_currency_metabolites(rxn_table, degree_filter = 30)
 }
@@ -15,7 +15,7 @@ filter_currency_metabolites(rxn_table, degree_filter = 30)
 Network table without compounds found in reactions greater than the cutoff
 }
 \description{
-Create a community metabolic network model using a few different methods.
+Remove metabolites linked to many reactions from a metabolic network.
 }
 \examples{
 filter_currency_metabolites(rxn_table, degree_filter = 50)

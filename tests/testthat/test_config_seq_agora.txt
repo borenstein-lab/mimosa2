@@ -1,6 +1,6 @@
 file1	test_seqs.txt
 file2	test_mets_ASD.txt
-genomeChoices	Map sequences to AGORA genomes and models
+genomeChoices	AGORA genomes and models
 database	Sequence variants
 modelTemplate	AGORA metabolic models
 kegg_prefix	~/Documents/MIMOSA2shiny/data/KEGGfiles/

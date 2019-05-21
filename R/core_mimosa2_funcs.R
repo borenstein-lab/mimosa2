@@ -29,8 +29,10 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F){
         model_dat[x,Slope:=scaling_coefs[2]]
         if(!rank_based){
           model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
+          model_dat[x,PVal:=anova(scaling_mod)[["Pr(>F)"]][1]]
         } else {
           model_dat[x,Rsq:=try(Rfit::summary.rfit(scaling_mod, overall.test = "drop")$R2)]
+          model_dat[x,PVal:=try(Rfit::drop.test(scaling_mod)$p.value)]
         }
         if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
         resid_dat[compound==all_comps[x], Resid:=scaling_resids]
@@ -308,9 +310,11 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
   }
+  ## Should have a function to calculate font sizes depending on the # of features
   if(met_id_col == "metID" & !"metID" %in% names(varShares)){
     varShares[,metID:=met_names(as.character(compound))]
-    met_order = varShares[Species=="Residual"][order(VarShare, decreasing = F), metID]
+    met_order = varShares[Species=="Residual" & !is.na(VarShare) & VarShare != 0][order(VarShare, decreasing = F), metID]
+    varShares = varShares[metID %in% met_order]
     varShares[,metID:=factor(metID, levels = met_order)]
   } else {
     varShares[,metID:=get(met_id_col)]
@@ -553,7 +557,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
     } else if (config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ #embl_gems
       network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "embl_gems/processed/"))
     }else stop('Invalid model format specified')
-    if(!(config_table[V1=="database", V2==get_text("database_choices")[4]] & config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]])){
+    if(!(config_table[V1=="database", V2==get_text("database_choices")[4]] & identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[1]))){
       #Anything other than generic KOs
       species = species[OTU %in% network[,OTU]]
     }
@@ -652,6 +656,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       #Get rid of tiny values from stoich matrix errors combining synth/deg
       setnames(spec_cmps, c("OTU", "V1"), c("Species", "CMP"))
       spec_cmps[abs(CMP)/value < 10e-15, CMP:=0]
+      spec_cmps[,value:=NULL]
     } else {
       setnames(spec_cmps, "OTU", "Species")
       spec_cmps[,SpecRxn:=paste0(Species, "_", KO)]
@@ -705,7 +710,7 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, re
     ko_table_melt[,value:=value/sum(value)*1000, by=Sample]
   }
   if(remove_rev){ #Remove reversible reactions
-    network = get_non_rev_rxns(network, all_rxns = T)
+    network = get_non_rev_rxns(network, all_rxns = T, by_species = F)
     network = network[Reversible==0]
   }
   network_reacs = network[,list(KO, Reac, stoichReac)]
@@ -939,6 +944,9 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   if("rxnEdit" %in% config_table[,V1]){
     rxn_param = T
   } else rxn_param = F
+  if("rankBased" %in% config_table[,V1]){
+    rank_based = T
+  } else rank_based = F
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     no_spec_param = T
   } else {
@@ -952,21 +960,33 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   if("revRxns" %in% config_table[,V1]){ #Whether to add reverse of reversible-annotated rxns
     network = add_rev_rxns(network)
   }
-  if("refine" %in% config_table[,V1]){
-    network = refine_rev_rxns(network)
-  }
+  # if("refine" %in% config_table[,V1]){
+  #   network = refine_rev_rxns(network, )
+  # }
+  if("met_transform" %in% config_table[,V1]){
+    met_transform = config_table[V1=="met_transform", V2]
+  } else met_transform = ""
+  if("score_transform" %in% config_table[,V1]){
+    score_transform = config_table[V1=="score_transform", V2]
+  } else score_transform = ""
 
   #indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
   mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
+  if(met_transform != ""){
+    mets_melt = transform_mets(mets_melt, met_transform)
+  }
   if(rxn_param){
-    cmp_mods =  fit_cmp_net_edit(network, species, mets_melt, manual_agora = agora_param)
+    cmp_mods =  fit_cmp_net_edit(network, species, mets_melt, manual_agora = agora_param, rank_based = rank_based)
     network = cmp_mods[[3]] #Revised network
     indiv_cmps = cmp_mods[[4]]
     #Will have to report nice summary of rxns removed, rxns direction switched, etc
   } else {
     indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param)
+    if(score_transform != ""){
+      indiv_cmps = transform_cmps(indiv_cmps, score_transform)
+    }
     indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
-    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt)
+    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based)
   }
   indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
   var_shares = calculate_var_shares(indiv_cmps)
@@ -985,6 +1005,75 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   #met_order = var_shares[Species=="Residual"][order(VarShare, increasing = T), metID]
   #var_shares[,metID:=factor(metID, levels = metID)]
 
+}
+
+#' Apply a transformation to metabolite data
+#'
+#' @param met_dat Dataset of metabolite concentrations
+#' @param met_transform transformation to apply (current options: zscore, log1plus, sqrt)
+#'
+#' @return Dataset with transformed values (rawValue is pre-transofrmation, value is now transformed value)
+#' @export
+#'
+#' @examples
+#' transform_mets(mets_melt, met_transform = "zscore")
+transform_mets = function(met_dat, met_transform){
+  if(met_transform == "zscore"){
+    met_dat[,scaledValue:=scale(value), by=compound]
+  } else if(met_transform == "logplus"){
+    if(any(met_dat[,value < 0])){
+      met_dat[,scaledValue:=value - min(value, na.rm = T), by=compound]
+    } else met_dat[,scaledValue:=value]
+    met_dat[,scaledValue:=log1p(scaledValue)]
+  } else if(met_transform == "sqrt"){
+    if(any(met_dat[,value < 0])){
+      met_dat[,scaledValue:=value - min(value, na.rm = T), by=compound]
+    } else met_dat[,scaledValue:=value]
+    met_dat[,scaledValue:=sqrt(scaledValue)]
+  } else {
+    warning("Transformation option not supported, returning original data")
+  }
+  if("scaledValue" %in% names(met_dat)){
+    setnames(met_dat, c("value", "scaledValue"), c("rawValue", "value"))
+  }
+  return(met_dat)
+}
+
+#' Apply a transformation to CMP data
+#'
+#' @param cmp_dat Dataset of species-specific metabolic potential scores
+#' @param score_transform transformation to apply (current options: zscore, log1plus, sqrt)
+#'
+#' @return Dataset with transformed values (rawValue is pre-transofrmation, value is now transformed value)
+#' @export
+#'
+#' @examples
+#' transform_cmps(indiv_cmps, met_transform = "zscore")
+transform_cmps = function(cmp_dat, score_transform){
+  if(score_transform == "zscore"){
+    #Do it so that they add up to the z scores
+    tot_cmps = cmp_dat[,sum(CMP), by=list(compound, Sample)]
+    cmp_mean_sd = tot_cmps[,list(mean(V1), sd(V1)), by=compound]
+    cmp_dat = merge(cmp_dat, cmp_mean_sd, by = "compound")
+    cmp_dat[,scaledValue:=(CMP-V1)/V2, by=compound]
+    #cmp_dat[,scaledValue:=scale(CMP), by=list(compound, Species)]
+  } else if(score_transform == "logplus"){
+    if(any(cmp_dat[,CMP < 0])){
+      cmp_dat[,scaledValue:=CMP - min(CMP, na.rm = T), by=compound]
+    } else cmp_dat[,scaledValue:=CMP]
+    cmp_dat[,scaledValue:=log1p(scaledValue)]
+  } else if(score_transform == "sqrt"){
+    if(any(cmp_dat[,CMP < 0])){
+      cmp_dat[,scaledValue:=CMP - min(CMP, na.rm = T), by=compound]
+    } else cmp_dat[,scaledValue:=CMP]
+    cmp_dat[,scaledValue:=sqrt(scaledValue)]
+  } else {
+    warning("Transformation option not supported, returning original data")
+  }
+  if("scaledValue" %in% names(cmp_dat)){
+    setnames(cmp_dat, c("CMP", "scaledValue"), c("rawCMP", "CMP"))
+  }
+  return(cmp_dat)
 }
 
 #' Assign seq vars to OTUs or AGORA models using vsearch

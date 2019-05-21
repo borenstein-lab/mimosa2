@@ -91,7 +91,7 @@ cmp_species_contributions_picrust = function(j, cmps_sub_good, all_rxns, subject
         if(comparison == "cmps"){
           species_cmp_cors = sapply(1:length(all_taxa), function(x){
             if(nrow(cmps_sub_good[compound]) > 1){stop("Duplicate metabolite IDs, please fix")}
-            if(!is.na(single_spec_cmps[[x]])){
+            if(!identical(single_spec_cmps[[x]], NA)){
               if(compound %in% single_spec_cmps[[x]][,compound]){
                 return(try(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][compound,subjects,with=F])), method="pearson", use = "complete.obs")))
               } else {
@@ -327,7 +327,11 @@ get_all_singleSpec_cmps = function(all_otus, all_koAbunds_byOTU, valueVar, out_p
     if(nrow(rxn_table[KO %in% all_koAbunds_byOTU[[k]][,KO]]) > 0){
       if(identical(ko_net, "")){
         sub_ko_net = generate_genomic_network(all_koAbunds_byOTU[[k]][,KO], keggSource = "KeggTemplate", degree_filter = degree_filter, rxn_table = rxn_table, normalize = normalize)
-        cmps_alone[[k]] = get_cmp_scores(sub_ko_net[[1]], all_koAbunds_byOTU[[k]])
+        if(is.null(sub_ko_net[[1]])){
+          cmps_alone[[k]] = NA
+        } else {
+          cmps_alone[[k]] = get_cmp_scores(sub_ko_net[[1]], all_koAbunds_byOTU[[k]])
+        }
       } else {
         cmps_alone[[k]] = get_cmp_scores(ko_net[[1]], all_koAbunds_byOTU[[k]])
       }
@@ -418,7 +422,7 @@ get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, o
       cmps_sub_good = get_cmp_scores(ko_net[[1]], norm_kos) # Full community cmp scores
       cmp_sub_good = cmps_sub_good[node_data[,compound]]
       all_rxns = lapply(node_data[,compound], function(x){ return(ko_net[[3]][Reac==x|Prod==x])})
-      all_rxns = lapply(all_rxns,get_non_rev_rxns)
+      all_rxns = lapply(all_rxns,get_non_rev_rxns, by_species = F)
     #  if(!all(is.na(match(c("cmps_alone", "all_otus"),ls())))){ #If all of these do not already exist
     #contribs = data.table::fread(contrib_file)
       spec_contrib=rbindlist(lapply(1:length(node_data[,compound]),cmp_species_contributions_picrust, cmps_sub_good = cmp_sub_good, all_rxns = all_rxns, subjects = subjects, norm_kos = norm_kos, ko_net = ko_net, all_taxa = all_otus, single_spec_cmps = cmps_alone, cor_with=T, comparison, met_data))
@@ -428,7 +432,7 @@ get_spec_contribs = function(contrib_file, data_dir, results_file, out_prefix, o
       cmps_sub_good = get_cmp_scores(ko_net[[1]], norm_kos) # Full community cmp scores
       cmp_sub_good = cmps_sub_good[node_data[,compound]]
       all_rxns = lapply(node_data[,compound], function(x){ return(ko_net[[3]][Reac==x|Prod==x])})
-      all_rxns = lapply(all_rxns,get_non_rev_rxns)
+      all_rxns = lapply(all_rxns,get_non_rev_rxns, by_species = F)
       
       if(var_share == T & cov_share == F){
         spec_contrib = var_shares_cmps(cmps_sub_good = cmp_sub_good, all_rxns = all_rxns, subjects = subjects, norm_kos = norm_kos, 

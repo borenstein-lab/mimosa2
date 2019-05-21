@@ -6,7 +6,7 @@
 \usage{
 fit_cmp_net_edit(network, species, mets_melt, manual_agora = F,
   rsq_factor = 1.15, min_rsq = 0.1, min_rxns = 3,
-  max_rxns_test = 40)
+  max_rxns_test = 40, rank_based = F, species_specific = T)
 }
 \arguments{
 \item{network}{Edge list reaction table (including reversibility info)}
@@ -16,6 +16,18 @@ fit_cmp_net_edit(network, species, mets_melt, manual_agora = F,
 \item{mets_melt}{Table of metabolite concentrations}
 
 \item{manual_agora}{Whether to leave in agora/bigg format}
+
+\item{rsq_factor}{Improvement in R squared needed to keep going}
+
+\item{min_rsq}{Minimum r squared needed to accept an improvement}
+
+\item{min_rxns}{Minimum number of reactions remaining to continue iterating}
+
+\item{rank_based}{Whether to use rank-based regression}
+
+\item{species_specific}{Whether to adjust rxns in a species-specific or whole-community manner}
+
+\item{max_rxns}{Maximum number of reactions to try}
 }
 \description{
 Greedy algorithm to test network improvements /refine rxn network

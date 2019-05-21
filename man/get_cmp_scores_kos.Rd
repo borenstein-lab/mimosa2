@@ -4,7 +4,8 @@
 \alias{get_cmp_scores_kos}
 \title{Updated version of getting all sample-level CMP scores from a KO abundance table}
 \usage{
-get_cmp_scores_kos(ko_table, network, normalize = T, relAbund = T)
+get_cmp_scores_kos(ko_table, network, normalize = T, relAbund = T,
+  remove_rev = T)
 }
 \arguments{
 \item{ko_table}{KO abundance table (wide format)}
@@ -12,6 +13,8 @@ get_cmp_scores_kos(ko_table, network, normalize = T, relAbund = T)
 \item{network}{Species-specific network table, product of build_network functions}
 
 \item{normalize}{Whether to normalize rows when making the network EMM}
+
+\item{remove_rev}{Whether to remove rev rxns before calculating/normalizing}
 }
 \value{
 data.table of cmp scores for each taxon and compound

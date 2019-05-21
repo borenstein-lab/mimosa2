@@ -7,7 +7,7 @@
 map_seqvar(seqs, repSeqDir = "data/blastDB/",
   repSeqFile = "agora_NCBI_16S.udb", method = "vsearch",
   vsearch_path = "vsearch", file_prefix = "seqtemp", seqID = 0.99,
-  add_agora_names = T, otu_tab = F)
+  add_agora_names = T, add_embl_names = F, otu_tab = F)
 }
 \arguments{
 \item{seqs}{vector of sequence variants}
@@ -25,6 +25,8 @@ map_seqvar(seqs, repSeqDir = "data/blastDB/",
 \item{seqID}{threshold for vsearch --usearch-global search}
 
 \item{add_agora_names}{Whether to add AGORA IDs to the table}
+
+\item{add_embl_names}{Whether to add RefSeq/embl_gems names to the table}
 
 \item{otu_tab}{Whether to return an OTU table, or just the matched sequences}
 }

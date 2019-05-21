@@ -193,7 +193,7 @@ test_that("Metagenome option works", {
   config1[V1=="database", V2:=get_text("database_choices")[4]]
   config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
   config1 = config1[V1 != "file1"]
-  config1 = rbind(config1, data.table(V1="metagenome", V2 = "test_metagenome.txt"))
+  config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_metagenome.txt", get_text("metagenome_options")[1])))
   config1[V1=="file2", V2:="test_metagenome_mets.txt"]
   config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_metagenome")

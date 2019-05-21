@@ -1,6 +1,131 @@
 #core_functions.R
 #workflow of functions for MIMOSA analysis
 
+#' Run full MIMOSA1 analysis (2019)
+#'
+#' @import data.table
+#' @param species processed species table
+#' @param mets processed metabolite table
+#' @param species_file File prefix from species data or other ID for saving
+#' @param picrust_file_paths paths to picrust1 files
+#' @param rxn_path Path to processed mapformula reaction table
+#' @param simulated Whether this is simulated data
+#' @param config_table A MIMOSA2 configuration table of analysis settings (required only for using simulation data)
+#' @return Output of run_all_metabolites
+#' @examples
+#' run_mimosa1(species, mets)
+#' @export
+run_mimosa1 = function(species, mets, species_file = "mimosa1", picrust_file_paths = c("data/picrustGenomeData/16S_13_5_precalculated.tab.gz", "data/picrustGenomeData/indivGenomes/", "_genomic_content.tab"),
+                       rxn_path = "data/KEGGfiles/full_rxn_table.txt", simulated = F, config_table = NULL){
+  if(!simulated){
+    contrib_table = generate_contribution_table_using_picrust(species, picrust_file_paths[1], picrust_file_paths[2], picrust_file_paths[3], copynum_column = T)
+    print(contrib_table)
+    genes = contrib_table[,sum(contribution), by=list(Sample, Gene)]
+    genes = dcast(genes, Gene~Sample, value.var = "V1", fill = 0)
+    setnames(genes, "Gene", "KO")
+    if("compound" %in% names(mets)) setnames(mets, "compound", "KEGG")
+    setkey(mets, "KEGG")
+    #if("contribution") 
+    setnames(contrib_table, c("contribution", "copy_number"), c("CountContributedByOTU", "GeneCountPerGenome"))
+    file_id = gsub(".txt", "", basename(species_file))
+    file_prefix = file_id
+    rxn_table = fread(rxn_path)
+    results1 = run_all_metabolites(genes, mets, file_prefix = file_prefix, id_met = F, met_id_file = NULL,
+                                   net_method = "KeggTemplate", net_file = NULL, rxn_table_source = rxn_table,
+                                   correction = "fdr", degree_filter = 30, minpath_file = NULL, cor_method = "spearman", nperm = 1000, nonzero_filter = 4, save_out = F)
+    #load(paste0(file_prefix, "_out.rda"))
+  } else {
+    spec_codes = data.table(Species = sort(unique(species[,OTU])), Code = sort(unique(species[,OTU])))
+    network_noRev = build_metabolic_model(species, config_table = config_table, manual_agora = T, degree_filt = 0)[[1]]
+    results1 = run_all_metabolites_FBA2("HMPsims", fake_spec = species, fake_mets = mets, network = network_noRev, nperm = 1000, spec_codes = spec_codes)
+  }
+  return(results1)
+}
+
+#' Run full MIMOSA1 analysis on simulation data (2019)
+#'
+#' @import data.table
+#' @param run_prefix 
+#' @param fake_spec processed species table
+#' @param fake_mets processed metabolite table
+#' @param network output of build_metabolic_model
+#' @param spec_codes Table of species IDs
+#' @param cor_method spearman or pearson
+#' @param correction fdr or bonferroni
+#' @param nperm Number of Mantel permutations
+#' @param nonzero_filter Number of samples that must be nonzero for a metabolite to be included
+#' @param kegg_translate Compound ID table
+#' @return Output of run_all_metabolites
+#' @examples
+#' run_all_metabolites_FBA2("sim1", species, mets, network, spec_codes)
+#' @export
+run_all_metabolites_FBA2 = function(run_prefix, fake_spec, fake_mets, network, spec_codes, cor_method = "spearman", 
+                                    correction = "fdr", nperm = 10000, nonzero_filter = 4,  kegg_translate = ""){
+  subjects = intersect(names(fake_spec), names(fake_mets))
+  if(length(subjects) < 2) stop("Sample names not consistent between genes and metabolites")
+  
+  species_cmps = get_species_cmp_scores(fake_spec, network, manual_agora = T)
+  tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
+  cmp_mat = dcast(tot_cmps, compound~Sample, value.var = "V1", fill = 0)
+  #cmp_mat[,compound:=gsub("[e]", "[env]", compound, fixed = T)]
+  #cmp_mat = get_cmp_scores(emm, norm_kos)
+  
+  #get mets
+  if(!"medium" %in% names(fake_mets) & !"compound" %in% names(fake_mets)){
+    fake_mets = merge(fake_mets, kegg_translate, by="Metabolite", all.x=T, all.y=F)
+  }
+  if("compound" %in% names(fake_mets)){
+    metIDs = fake_mets[,compound] 
+    met_name = "compound"
+  } else {
+    metIDs = fake_mets[,medium]
+    met_name = "medium"
+  }
+  shared_mets = metIDs[metIDs %in% cmp_mat[,unique(compound)]] 
+  setkey(cmp_mat, compound)
+  setkey(fake_mets, compound)
+  all_comparisons = vector("list",length(shared_mets))
+  
+  for(j in 1:length(shared_mets)){
+    #What is happening??
+    good_subs = intersect(names(fake_mets)[which(!is.na(unlist(fake_mets[shared_mets[j]])))], names(cmp_mat)[which(!is.na(unlist(cmp_mat[shared_mets[j],subjects,with=F])))])
+    good_subs = good_subs[good_subs != "compound"]
+    prmt_vector = unlist(cmp_mat[shared_mets[j],good_subs,with=F])
+    met_vector = unlist(fake_mets[shared_mets[j],good_subs,with=F])
+    #check for too many 0s
+    if(length(met_vector[met_vector!=0 & !is.na(met_vector)]) <= nonzero_filter | length(prmt_vector[prmt_vector!=0]) <= nonzero_filter | length(unique(met_vector)) < 2 | length(unique(prmt_vector)) < 2){
+      all_comparisons[[j]] = NA
+    }else{
+      met_mat = make_pairwise_met_matrix(shared_mets[j], cmp_mat[,c(good_subs, "compound"),with=F])
+      metabol_mat = make_pairwise_met_matrix(shared_mets[j], fake_mets[,c(good_subs,met_name),with=F])
+      test = mantel_2sided(met_mat,metabol_mat,method=cor_method,permutations = nperm, direction = "pos")
+      test_n = mantel_2sided(met_mat,metabol_mat,method=cor_method,permutations = nperm, direction = "neg")
+      all_comparisons[[j]] = list(ID = shared_mets[j], PRMT = met_mat, Mets = metabol_mat, Mantel = list(test,test_n))
+    }
+  }
+  failed_mets = shared_mets[which(is.na(all_comparisons))]
+  shared_mets = shared_mets[which(!is.na(all_comparisons))]
+  all_comparisons = all_comparisons[which(!is.na(all_comparisons))]
+  
+  correction = "fdr"
+  cors_s = sapply(all_comparisons,function(x){return(x$Mantel[[1]]$statistic)})
+  pvals_s = sapply(all_comparisons,function(x){return(x$Mantel[[1]]$signif)})
+  pvals2_s = correct(pvals_s, method = correction)
+  
+  cors_n = sapply(all_comparisons,function(x){return(x$Mantel[[2]]$statistic)})
+  pvals_n = sapply(all_comparisons,function(x){return(x$Mantel[[2]]$signif)})
+  pvals2_n = correct(pvals_n, method = correction)
+  
+  node_data = data.table::data.table(compound = shared_mets, Correlation = cors_s, PValPos = pvals_s, QValPos = pvals2_s, PValNeg = pvals_n, QValNeg = pvals2_n)
+  setkey(node_data,compound)
+  
+  node_data[,PredictionType:=ifelse(QValPos < 0.1, "Consistent", "Inconsistent")]
+  node_data[,PredictionType:=ifelse(QValNeg < 0.1, "Contrasting", PredictionType)]
+  
+  #save melted version for easier post processing
+  cmp_mat_save = melt(cmp_mat, id.var = "compound", variable.name = "Sample", variable.factor = F)
+  return(list(failed_mets, fake_mets, cmp_mat_save, all_comparisons, node_data))
+}
 
 get_kegg_reaction_links = function(rxns){
   foo = vector("list", length(rxns))
@@ -126,6 +251,7 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
     }
   }
   mapformula = new_mapformula
+  mapformula = mapformula[Path!=" 01100" & Path != 1100 & Path !="01100"] #If numeric
   mapformula = merge(mapformula, all_kegg$kos_to_rxns, by="Rxn", all.x=T, all.y=F, allow.cartesian=T)
   mapformula = mapformula[!is.na(KO)]
   setkey(mapformula, NULL)
@@ -181,7 +307,7 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
   return(rxn_table)
 }
 
-#' Create a community metabolic network model using a few different methods.
+#' Remove metabolites linked to many reactions from a metabolic network.
 #'
 #' @import data.table
 #' @param rxn_table Network table of reactions
@@ -271,56 +397,66 @@ generate_genomic_network = function(kos, keggSource = "KeggTemplate", degree_fil
     #expand into adjacency and stoichiometry matrices
     #cat("Making stoichiometric matrix\n")
     if(return_mats){
-      network_mat = matrix(rep(0), nrow = length(cmpds), ncol = length(goodkos))
-      stoich_mat = matrix(rep(NA), nrow = length(cmpds), ncol = length(goodkos))
       rxn_table = get_non_rev_rxns(rxn_table, by_species = F)
-      net_prods = unique(rxn_table[Reversible==0,list(KO, Prod, stoichProd)])
-      net_reacs = unique(rxn_table[Reversible==0,list(KO, Reac, stoichReac)])
-      
-      for(j in 1:length(net_prods[,KO])){
-        foo2 = match(net_prods[j,Prod], cmpds)
-        fooko = match(net_prods[j,KO], goodkos)
-        #network_mat[foo1, fooko] = network_mat[foo1, fooko] - rxn_table[j,stoichReac]
-        network_mat[foo2, fooko] = network_mat[foo2, fooko] + net_prods[j, stoichProd]
-        #if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
-        if(is.na(stoich_mat[foo2,fooko])) stoich_mat[foo2,fooko] = 1*net_prods[j,stoichProd] else stoich_mat[foo2,fooko] = stoich_mat[foo2, fooko] + net_prods[j,stoichProd] ##Luckily this doesn't affect anything
-      }
-      for(j in 1:length(net_reacs[,KO])){
-        foo1 = match(net_reacs[j,Reac], cmpds)
-        fooko = match(net_reacs[j,KO], goodkos)
-        network_mat[foo1, fooko] = network_mat[foo1, fooko] - net_reacs[j, stoichReac]
-        #if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
-        if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*net_reacs[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - net_reacs[j,stoichReac] ##Luckily this doesn't affect anything
+      if(nrow(rxn_table[Reversible==0]) != 0){
+        net_prods = unique(rxn_table[Reversible==0,list(KO, Prod, stoichProd)])
+        net_reacs = unique(rxn_table[Reversible==0,list(KO, Reac, stoichReac)])
+        #Redefine goodkos and cmps after removing reversible
+        goodkos = unique(c(net_prods[,KO], net_reacs[,KO]))
+        cmpds = unique(c(net_prods[,Prod], net_reacs[,Reac]))
+        network_mat = matrix(rep(0), nrow = length(cmpds), ncol = length(goodkos))
+        stoich_mat = matrix(rep(NA), nrow = length(cmpds), ncol = length(goodkos))
         
-      }
-      if(normalize){
-        if(length(cmpds) > 1 & length(goodkos) > 1){
-          network_mat = t(as.matrix(apply(network_mat, 1, function(x){
-            negkos = which(x < 0)
-            poskos = which(x > 0)
-            x[negkos] = x[negkos]/abs(sum(x[negkos]))
-            x[poskos] = x[poskos]/sum(x[poskos])
-            return(x)
-          })))
-        } else {
-          network_mat = sapply(network_mat, function(x){
-            negkos = which(x < 0)
-            poskos = which(x > 0)
-            x[negkos] = x[negkos]/abs(sum(x[negkos]))
-            x[poskos] = x[poskos]/sum(x[poskos])
-            return(x)
-          })
-          dim(network_mat) = c(length(cmpds), length(goodkos))
+        for(j in 1:length(net_prods[,KO])){
+          foo2 = match(net_prods[j,Prod], cmpds)
+          fooko = match(net_prods[j,KO], goodkos)
+          #network_mat[foo1, fooko] = network_mat[foo1, fooko] - rxn_table[j,stoichReac]
+          network_mat[foo2, fooko] = network_mat[foo2, fooko] + net_prods[j, stoichProd]
+          #if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
+          if(is.na(stoich_mat[foo2,fooko])) stoich_mat[foo2,fooko] = 1*net_prods[j,stoichProd] else stoich_mat[foo2,fooko] = stoich_mat[foo2, fooko] + net_prods[j,stoichProd] ##Luckily this doesn't affect anything
         }
+        for(j in 1:length(net_reacs[,KO])){
+          foo1 = match(net_reacs[j,Reac], cmpds)
+          fooko = match(net_reacs[j,KO], goodkos)
+          network_mat[foo1, fooko] = network_mat[foo1, fooko] - net_reacs[j, stoichReac]
+          #if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*rxn_table[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - rxn_table[j,stoichReac]
+          if(is.na(stoich_mat[foo1,fooko])) stoich_mat[foo1,fooko] = -1*net_reacs[j,stoichReac] else stoich_mat[foo1,fooko] = stoich_mat[foo1, fooko] - net_reacs[j,stoichReac] ##Luckily this doesn't affect anything
+          
+        }
+        if(normalize){
+          if(length(cmpds) > 1 & length(goodkos) > 1){
+            network_mat = t(as.matrix(apply(network_mat, 1, function(x){
+              negkos = which(x < 0)
+              poskos = which(x > 0)
+              x[negkos] = x[negkos]/abs(sum(x[negkos]))
+              x[poskos] = x[poskos]/sum(x[poskos])
+              return(x)
+            })))
+          } else {
+            network_mat = sapply(network_mat, function(x){
+              negkos = which(x < 0)
+              poskos = which(x > 0)
+              x[negkos] = x[negkos]/abs(sum(x[negkos]))
+              x[poskos] = x[poskos]/sum(x[poskos])
+              return(x)
+            })
+            dim(network_mat) = c(length(cmpds), length(goodkos))
+          }
+        }
+        network_mat = data.frame(network_mat)
+        if(ncol(network_mat) != length(goodkos)) stop("Problem with KO list for network")
+        if(nrow(network_mat) != length(cmpds)) stop("Problem with compound list for network")
+        names(network_mat) = goodkos
+        row.names(network_mat) = cmpds
+        stoich_mat = data.frame(stoich_mat)
+        names(stoich_mat) = goodkos
+        row.names(stoich_mat) = cmpds
+      } else {
+        warning("Reversible rxn issues")
+        print(rxn_table)
+        return(list(NULL, NULL, rxn_table))
       }
-      network_mat = data.frame(network_mat)
-      if(ncol(network_mat) != length(goodkos)) stop("Problem with KO list for network")
-      if(nrow(network_mat) != length(cmpds)) stop("Problem with compound list for network")
-      names(network_mat) = goodkos
-      row.names(network_mat) = cmpds
-      stoich_mat = data.frame(stoich_mat)
-      names(stoich_mat) = goodkos
-      row.names(stoich_mat) = cmpds
+
       return(list(network_mat, stoich_mat, rxn_table))
     } else {
       return(rxn_table)
@@ -465,9 +601,6 @@ generate_genomic_network = function(kos, keggSource = "KeggTemplate", degree_fil
   }
 }
 
-
-
-
 #' Calculate CMP scores based on community network and gene abundances
 #'
 #' @import data.table
@@ -482,22 +615,27 @@ get_cmp_scores = function(emm, norm_kos){
   nsamp = dim(norm_kos)[2]-1
   norm_kos_sub = norm_kos[KO %in% names(emm)]
   subjects = names(norm_kos)[names(norm_kos)!="KO"]
-  cmp = matrix(rep(NA),nrow = metlen,ncol = nsamp)
-  emm = emm[,match(norm_kos_sub[,KO], names(emm)), drop = F]
-  if(all(names(emm)==norm_kos_sub[,KO])){
-    for(m in 1:nsamp){
-      cmp[,m] =  1000*as.matrix(emm) %*% unlist(norm_kos_sub[,subjects[m],with=F])
+  if(!is.null(metlen)){
+    cmp = matrix(rep(NA),nrow = metlen,ncol = nsamp)
+    emm = emm[,match(norm_kos_sub[,KO], names(emm)), drop = F]
+    if(all(names(emm)==norm_kos_sub[,KO])){
+      for(m in 1:nsamp){
+        cmp[,m] =  1000*as.matrix(emm) %*% unlist(norm_kos_sub[,subjects[m],with=F])
+      }
+    }else if(all(sort(names(emm))==sort(norm_kos_sub[,KO]))){ #Just out of order
+      emm = emm[,order(names(emm))]
+      norm_kos_sub = norm_kos_sub[order(KO)]
+    } else {
+      stop("Double check you are using the correct metabolic network! Gene KOs do not equal network KOs")
     }
-  }else if(all(sort(names(emm))==sort(norm_kos_sub[,KO]))){ #Just out of order
-    emm = emm[,order(names(emm))]
-    norm_kos_sub = norm_kos_sub[order(KO)]
+    cmp = data.table(cmp,row.names(emm))
+    setnames(cmp,c(subjects,"compound"))
+    setkey(cmp,compound)
+    return(cmp)
   } else {
-    stop("Double check you are using the correct metabolic network! Gene KOs do not equal network KOs")
+    warning("Empty network")
+    return(NULL)
   }
-  cmp = data.table(cmp,row.names(emm))
-  setnames(cmp,c(subjects,"compound"))
-  setkey(cmp,compound)
-  return(cmp)
 }
 
 #' Make a data vector into a pairwise difference matrix (can be used for either cmp scores or metabolite concentrations)

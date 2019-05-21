@@ -6,7 +6,7 @@
 \usage{
 get_species_cmp_scores(species_table, network, normalize = T,
   relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F,
-  kos_only = F)
+  kos_only = F, remove_rev = T)
 }
 \arguments{
 \item{species_table}{OTU abundance table (wide format)}
@@ -24,6 +24,8 @@ get_species_cmp_scores(species_table, network, normalize = T,
 \item{leave_rxns}{Return individual abundance/direction scores for each species and rxn}
 
 \item{kos_only}{Whether to call non-species-specific version of this function instead}
+
+\item{remove_rev}{Whether to remove reversible reactions before calculating anything}
 }
 \value{
 data.table of cmp scores for each taxon and compound

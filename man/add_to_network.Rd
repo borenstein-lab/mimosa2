@@ -16,6 +16,10 @@ add_to_network(network, addTable, target_format = NULL,
 \item{target_format}{Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra". If NULL, will try to guess}
 
 \item{source_format}{Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra". If NULL, will try to guess}
+
+\item{kegg_path}{Path to KEGG database}
+
+\item{data_path}{Path to reference data with AGORA-KEGG mappings}
 }
 \value{
 Expanded network table

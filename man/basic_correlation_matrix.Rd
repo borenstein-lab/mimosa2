@@ -19,3 +19,6 @@ Table of correlation coefficients and p-values for every species-metabolite pair
 \description{
 Basic species-metaoblite correlation for comparison
 }
+\examples{
+basic_correlation_matrix(species, mets)
+}

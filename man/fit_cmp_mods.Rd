@@ -4,7 +4,8 @@
 \alias{fit_cmp_mods}
 \title{Fits model scaling total CMPs to metabolite concentrations}
 \usage{
-fit_cmp_mods(species_cmps, mets_melt, rank_based = F)
+fit_cmp_mods(species_cmps, mets_melt, rank_based = F,
+  rank_type = "mblm")
 }
 \arguments{
 \item{species_cmps}{Table of species contribution abundances}
@@ -12,6 +13,8 @@ fit_cmp_mods(species_cmps, mets_melt, rank_based = F)
 \item{mets_melt}{Table of metabolite concentrations}
 
 \item{rank_based}{Whether to use Rfit instead of standard linear regression}
+
+\item{rank_type}{Type of robust regression to use}
 }
 \value{
 List of 2 data.tables - one with model summary results, one with model residuals

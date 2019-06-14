@@ -4,7 +4,8 @@
 \alias{fit_single_scaling_mod}
 \title{Fits single model scaling total CMPs to concentrations of a metabolite}
 \usage{
-fit_single_scaling_mod(met1, cmp_rxn_dat, mets_melt, rank_based = F)
+fit_single_scaling_mod(met1, cmp_rxn_dat, mets_melt, rank_based = F,
+  rank_type = "mblm")
 }
 \arguments{
 \item{met1}{metabolite ID to fit}

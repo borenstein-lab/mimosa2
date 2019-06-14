@@ -59,18 +59,19 @@ humann2_format_contributions = function(path_to_humann_file, file_read = F){
 #'
 #' @import data.table
 #' @param network community metabolic network model
-#' @return network with reverse of reversible reactions added, with separate reaction IDs (_1 added to ID)
+#' @param sameID Whether to give the reverse rxn the same rxn ID as forward
+#' @return network with reverse of reversible reactions added, optionally with separate reaction IDs (_1 added to ID)
 #' @examples
 #' add_rev_rxns(rxn_table)
 #' @export
-add_rev_rxns = function(network, refine = F){
+add_rev_rxns = function(network, sameID = F){
   rev_rxns = network[Rev==1]
   #Swap
   rev_rxns[,Reac2:=Prod]
   rev_rxns[,Prod:=Reac]
   rev_rxns[,Reac:=Reac2]
   rev_rxns[,Reac2:=NULL]
-  rev_rxns[,KO:=paste0(KO, "_1")]
+  if(!sameID) rev_rxns[,KO:=paste0(KO, "_1")]
   network = rbind(network, rev_rxns, fill = T)
   return(network)
 }
@@ -374,6 +375,7 @@ test_met_enrichment = function(node_data, met_list){
 #' @param method Correlation method, must be one recognized by cor.test
 #' @return Table of correlation coefficients and p-values for every species-metabolite pair with sufficient complete sample data
 #' @examples
+#' basic_correlation_matrix(species, mets)
 #' @export
 basic_correlation_matrix = function(species, mets, method="pearson"){
   all_dats = merge(species, mets, by = "Sample", allow.cartesian = T) #big table
@@ -381,6 +383,12 @@ basic_correlation_matrix = function(species, mets, method="pearson"){
   return(cor_results)
 }
 
+#' Generate img URIs for putting plots in output table
+#' 
+#' @param x File path to plot image
+#' @return Image URI
+#' @export
+img_uri <- function(x) { sprintf('<img src="%s"/>', knitr::image_uri(x)) }
 
 ##Functions for selecting approximate compound identifications based on MetaboSearch output
 select_best_id2 = function(met_table2, met_data, net_compounds, final_method = "first"){ ###no retention time, swedish data format
@@ -498,7 +506,13 @@ get_text = function(text_name){
   return(get(text_name))
 }
 
-
+#' Get random string (for saving temp files)
+#'
+#' @return 5 random letters and 5 random numbers
+#' @examples
+#' randomString()
+#'
+#' @export
 randomString <- function() { #5 random letters and 5 random numbers
   a <- do.call(paste0, replicate(5, sample(LETTERS, 1, TRUE), FALSE))
   paste0(a, sprintf("%05d", sample(9999, 1, TRUE)))

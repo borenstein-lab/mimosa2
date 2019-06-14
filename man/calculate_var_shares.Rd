@@ -2,12 +2,19 @@
 % Please edit documentation in R/core_mimosa2_funcs.R
 \name{calculate_var_shares}
 \alias{calculate_var_shares}
-\title{Calculates contributions to variance from a contribution table}
+\title{Wrapper function to calculate contributions to variance, specific method depends on configuration}
 \usage{
-calculate_var_shares(species_contribution_table, valueVar = "newValue")
+calculate_var_shares(species_contribution_table, met_table, model_results,
+  config_table, valueVar = "newValue")
 }
 \arguments{
 \item{species_contribution_table}{Table of species contributions (with residuals)}
+
+\item{met_table}{Long-form table of metabolite concentrations (Only used for permutation-based calculation)}
+
+\item{model_results}{Model fitting results from fit_cmp_mods}
+
+\item{config_table}{Table of analysis settings}
 
 \item{valueVar}{Column name to use for values}
 }
@@ -15,7 +22,7 @@ calculate_var_shares(species_contribution_table, valueVar = "newValue")
 Data table of variance shares by each species in the original table for each metabolite
 }
 \description{
-Calculates contributions to variance from a contribution table
+Wrapper function to calculate contributions to variance, specific method depends on configuration
 }
 \examples{
 calculate_var_shares(species_cmps)

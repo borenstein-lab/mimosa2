@@ -1,5 +1,5 @@
-### Taxa mapping functions, MIMOSA2
-# June 2018
+#' Taxa mapping functions, MIMOSA2
+#' June 2018
 
 #' Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species
 #'
@@ -7,11 +7,12 @@
 #' @param species_list List of species from mapping
 #' @param usePreprocessed Whether to process .mat files or use pre-computed versions
 #' @param agora_path Path to AGORA models
+#' @param remove_sinks Remove reactions that have NA as a substrate or product (usually uninformative transporters etc)
 #' @return A list with 2 entries - one a species abundance table in terms of the new species, the second a table of reactions for each species
 #' @examples
 #' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", simThreshold = 0.99)
 #' @export
-build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_path = "data/AGORA/"){
+build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_path = "data/AGORA/", remove_sinks = T){
   #Now load AGORA models
   if(usePreprocessed == F){
     agora_mods = load_agora_models(mod_list, agora_path = agora_path) #This takes a long time
@@ -23,6 +24,7 @@ build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_p
     }))
   }
   setnames(agora_mats, "Species", "OTU")
+  if(remove_sinks) agora_mats = agora_mats[!is.na(Prod) & !is.na(Reac)]
   return(agora_mats)
 }
 
@@ -34,11 +36,12 @@ build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_p
 #' @param species_names List of species names for each model
 #' @param edge_list Whether to return the metabolic network as a stoichiometric matrix or edge list
 #' @param get_bounds Whether to extract information on upper and lower bound constraints (only with edge list)
+#' @param remove_sinks Remove reactions that have NA as a substrate or product (usually uninformative transporters etc)
 #' @return Either a stoichiometric matrix or edge list of reactions
 #' @examples
 #' get_S_mats(all_mods, my_species, edge_list = T)
 #' @export
-get_S_mats = function(all_mods, species_names, edge_list = F, get_bounds = T){
+get_S_mats = function(all_mods, species_names, edge_list = F, get_bounds = T, remove_sinks = T){
   #get S matrices
   all_S_mat = list()
   for(j in 1:length(all_mods)){
@@ -57,6 +60,9 @@ get_S_mats = function(all_mods, species_names, edge_list = F, get_bounds = T){
       setnames(bound_table, c("KO", "LB", "UB"))
       bound_table[,Rev:=ifelse(LB < 0 & UB > 0, 1, 0)]
       all_S_mat = merge(all_S_mat, bound_table, by = "KO", all.x = T)
+    }
+    if(remove_sinks){
+      all_S_mat = all_S_mat[!is.na(Prod) & !is.na(Reac)]
     }
   }
   return(all_S_mat)
@@ -303,6 +309,7 @@ blast_seqs = function(seqs, blast_path = "data/blastDB/"){
 #'
 #' @import R.matlab
 #' @param matFile Path to matlab-formatted AGORA model
+#' @return Returns matlab object contents from the readMat function
 #' @examples
 #' getModelInfo(otu_file)
 #' @export

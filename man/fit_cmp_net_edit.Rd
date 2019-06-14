@@ -29,6 +29,9 @@ fit_cmp_net_edit(network, species, mets_melt, manual_agora = F,
 
 \item{max_rxns}{Maximum number of reactions to try}
 }
+\value{
+A list of model fitting results as well as revised versions of the community metabolic network model and the updated CMP scores
+}
 \description{
 Greedy algorithm to test network improvements /refine rxn network
 }

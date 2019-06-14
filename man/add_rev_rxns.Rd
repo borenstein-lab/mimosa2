@@ -4,13 +4,15 @@
 \alias{add_rev_rxns}
 \title{Add reverse of reversible reactions to edge list network}
 \usage{
-add_rev_rxns(network, refine = F)
+add_rev_rxns(network, sameID = F)
 }
 \arguments{
 \item{network}{community metabolic network model}
+
+\item{sameID}{Whether to give the reverse rxn the same rxn ID as forward}
 }
 \value{
-network with reverse of reversible reactions added, with separate reaction IDs (_1 added to ID)
+network with reverse of reversible reactions added, optionally with separate reaction IDs (_1 added to ID)
 }
 \description{
 Add reverse of reversible reactions to edge list network

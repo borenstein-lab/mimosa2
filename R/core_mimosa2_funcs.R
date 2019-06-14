@@ -6,23 +6,30 @@
 #' @param species_cmps Table of species contribution abundances
 #' @param mets_melt Table of metabolite concentrations
 #' @param rank_based Whether to use Rfit instead of standard linear regression
+#' @param rank_type Type of robust regression to use
 #' @return List of 2 data.tables - one with model summary results, one with model residuals
 #' @examples
 #' fit_cmp_mods(species_cmps, met_data)
 #' @export
-fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F){
+fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "mblm"){
     tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
     tot_cmps = merge(tot_cmps, mets_melt[,list(compound, Sample, value)], by = c("compound", "Sample"))
     all_comps = tot_cmps[,unique(compound)]
-    model_dat = data.table(compound = all_comps)
+    model_dat = data.table(compound = all_comps, Intercept = 0, Slope = 0, Rsq = 0, PVal = 0) #Make all other columns numeric
     resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
     for(x in 1:length(all_comps)){
       if(!rank_based){
-        scaling_mod = try(tot_cmps[compound==all_comps[x], lm(value~V1)])
+        scaling_mod = tryCatch(tot_cmps[compound==all_comps[x], lm(value~V1)], error=function(e){ NA})
       } else {
-        scaling_mod = try(tot_cmps[compound==all_comps[x], Rfit::rfit(value~V1)])
+        if(rank_type == "mblm"){
+          scaling_mod = tryCatch(tot_cmps[compound==all_comps[x], mblm::mblm(value~V1)], error=function(e){ NA})
+        } else if (rank_type == "svm"){
+          scaling_mod = tryCatch(tot_cmps[compound==all_comps[x], e1071::svm(value~V1, kernel = "linear")], error=function(e){ NA})
+        } else {
+          scaling_mod = tryCatch(tot_cmps[compound==all_comps[x], Rfit::rfit(value~V1)], error=function(e){ NA})
+        }
       }
-      if(class(scaling_mod) != "try-error"){
+      if(!identical(scaling_mod, NA)){
         scaling_coefs = coef(scaling_mod)
         scaling_resids = resid(scaling_mod)
         model_dat[x,Intercept:=scaling_coefs[1]]
@@ -31,8 +38,17 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F){
           model_dat[x,Rsq:=summary(scaling_mod)$r.squared]
           model_dat[x,PVal:=anova(scaling_mod)[["Pr(>F)"]][1]]
         } else {
-          model_dat[x,Rsq:=try(Rfit::summary.rfit(scaling_mod, overall.test = "drop")$R2)]
-          model_dat[x,PVal:=try(Rfit::drop.test(scaling_mod)$p.value)]
+          if(rank_type == "mblm"){
+            model_dat[x,Rsq:=0]
+            model_dat[x,PVal:=tryCatch(mblm::summary.mblm(scaling_mod)$coefficients[2,4], error=function(e){ NA})]
+          } else { 
+            mod_rsq = tryCatch(Rfit::summary.rfit(scaling_mod, overall.test = "drop")$R2, error=function(e){ NA})
+            mod_pval = tryCatch(Rfit::drop.test(scaling_mod)$p.value, error=function(e){ NA})
+            model_dat[x,Rsq:=mod_rsq]
+            model_dat[x,PVal:=mod_pval]
+            model_dat[x,RsqNoAdj:=1-(scaling_mod$D1/scaling_mod$D0)]
+            model_dat[x,Tauhat:=scaling_mod$tauhat]
+          }
         }
         if(length(scaling_resids) != nrow(resid_dat[compound==all_comps[x]])) stop("Missing residuals")
         resid_dat[compound==all_comps[x], Resid:=scaling_resids]
@@ -40,6 +56,69 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F){
     }
     return(list(model_dat, resid_dat))
 }
+
+#' Adjusted R-squared for a rank-based model
+#' 
+#' @import Rfit
+#' @param null_disp Null dispersion value
+#' @param model_disp Model dispersion value
+#' @param tauhat Estimate of tau scale parameter
+#' @param df2 Degrees of freedom
+#' @param df1 Model df (assumes 1)
+#' @return Adjusted r-squared
+#' @examples
+#' j.disp.rsq.adj(null_disp, model_disp, tau, df2)
+#' @export
+j.disp.rsq.adj = function(null_disp, model_disp, tauhat, df2, df1 = 1){
+  ## Adjusted R-squared from rfit model: 
+  Fstat = ((null_disp-model_disp))/(tauhat/2)
+  R2 = (df1/df2 * Fstat)/(1 + df1/df2 * Fstat)
+  return(R2)
+}
+
+#' Jaeckel's dispersion from the mean (null)
+#' 
+#' @import Rfit
+#' @param y Vector of response values
+#' @param scrs Optional score values (otherwise will use Wilcoxon)
+#' @return Value of Jaeckel's dispersion from the mean for this set of values
+#' @examples
+#' j.disp.mean(y_vals)
+#' @export
+j.disp.mean = function(y, scrs = NULL){
+  if(is.null(scrs)) scrs = getWScores(length(y))
+  e = y - mean(y, na.rm = T)
+  return(drop(crossprod(e[order(e)], scrs)))
+}
+
+#' Get Wilcoxon scores for Jaeckel's dispersion calculations
+#' 
+#' @import Rfit
+#' @param nSamps number of samples
+#' @return Vector of scores (length of nSamps)
+#' @examples
+#' getWScores(10)
+#' @export
+getWScores = function(nSamps){
+  return(getScores(Rfit::wscores, seq_len(nSamps)/(nSamps + 1)))
+}
+
+#' Jaeckel's dispersion from model predictions
+#' 
+#' @import Rfit
+#' @param yhat Model predictions
+#' @param y True response values
+#' @param scrs Optional score values (otherwise will use Wilcoxon)
+#' @return Value of Jaeckel's dispersion between predictions and the model
+#' @examples
+#' j.disp.fit(preds, y_vals)
+#' @export
+j.disp.fit = function(yhat, y, scrs = NULL){
+  if(is.null(scrs)) scrs = getWScores(length(y))
+  e = y - yhat
+  return(drop(crossprod(e[order(e)], scrs))) ###Note this is sum(e[order(e)]*scrs)
+}
+
 
 #' Fits single model scaling total CMPs to concentrations of a metabolite
 #'
@@ -52,13 +131,17 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F){
 #' @examples
 #' fit_single_scaling_mod(met1, species_cmps, met_data)
 #' @export
-fit_single_scaling_mod = function(met1, cmp_rxn_dat, mets_melt, rank_based = F){ #For a single metabolite
+fit_single_scaling_mod = function(met1, cmp_rxn_dat, mets_melt, rank_based = F, rank_type = "mblm"){ #For a single metabolite
   tot_cmps = cmp_rxn_dat[compound==met1, sum(CMP), by=list(Sample, compound)]
   tot_cmps = merge(tot_cmps, mets_melt, by = c("Sample", "compound"))
   if(rank_based == F){
-    scaling_mod = try(tot_cmps[compound==met1, lm(value~V1)])
+    scaling_mod = tryCatch(tot_cmps[compound==met1, lm(value~V1)], error=function(e){ NA})
   } else {
-    scaling_mod = try(tot_cmps[compound==met1, Rfit::rfit(value~V1)])
+    if(rank_type == "mblm"){
+      scaling_mod = tryCatch(tot_cmps[compound==met1, mblm::mblm(value ~ V1)], error=function(e){ NA})
+    } else {
+      scaling_mod = tryCatch(tot_cmps[compound==met1, Rfit::rfit(value~V1)], error=function(e){ NA})
+    }
   }
   return(scaling_mod)
 }
@@ -76,7 +159,7 @@ fit_single_scaling_mod = function(met1, cmp_rxn_dat, mets_melt, rank_based = F){
 #' @param max_rxns Maximum number of reactions to try
 #' @param rank_based Whether to use rank-based regression
 #' @param species_specific Whether to adjust rxns in a species-specific or whole-community manner
-#' @return
+#' @return A list of model fitting results as well as revised versions of the community metabolic network model and the updated CMP scores
 #' @examples
 #' get_best_rxn_subset(met1, species, met_data)
 #' @export
@@ -137,15 +220,15 @@ fit_cmp_net_edit = function(network, species, mets_melt, manual_agora = F, rsq_f
       all_scaling_mods = list()
       for(k in 1:length(uniq_rxns)){
         cmp_dat1 = cmp_dat[get(rxn_var) != uniq_rxns[k]]
-        all_scaling_mods[[k]] = try(fit_single_scaling_mod(met1, cmp_dat1, mets_melt, rank_based = rank_based))
+        all_scaling_mods[[k]] = tryCatch(fit_single_scaling_mod(met1, cmp_dat1, mets_melt, rank_based = rank_based), error=function(e){ NA})
       }
       slopes = sapply(all_scaling_mods, function(x){
-        if(class(x) != "try-error"){
+        if(!identical(x, NA)){
           return(x$coefficients[2])
         } else return(0)
       }) #Rule out changes that make this negative - oh - this isn't working
       rsqs = sapply(all_scaling_mods, function(x){ 
-        if(class(x) != "try-error"){
+        if(!identical(x, NA)){
         return(summary(x)$r.squared)} else {
           return(NA)
         }
@@ -204,7 +287,7 @@ fit_cmp_net_edit = function(network, species, mets_melt, manual_agora = F, rsq_f
 }
 
 #
-#' Returns a melted data table of species and their cmps, along with residual contributions
+#' Returns a melted data table of species and their scaled cmps (based on model coefficient), along with residual contributions
 #'
 #' @import data.table
 #' @param species_cmps data table of species and their CMPs
@@ -235,27 +318,59 @@ add_residuals = function(species_cmps, model_dat, resid_dat){
   return(species_cmps)
 }
 
+#' Wrapper function to calculate contributions to variance, specific method depends on configuration
+#'
+#' @import data.table
+#' @param species_contribution_table Table of species contributions (with residuals)
+#' @param met_table Long-form table of metabolite concentrations (Only used for permutation-based calculation)
+#' @param model_results Model fitting results from fit_cmp_mods
+#' @param valueVar Column name to use for values
+#' @param config_table Table of analysis settings
+#' @return Data table of variance shares by each species in the original table for each metabolite
+#' @examples
+#' calculate_var_shares(species_cmps)
+#' @export
+calculate_var_shares = function(species_contribution_table, met_table, model_results, config_table, valueVar = "newValue"){
+  if(!"rankBased" %in% config_table[,V1]){
+    #Add residuals here
+    species_contribution_table = add_residuals(species_contribution_table, model_dat = model_results[[1]], resid_dat = model_results[[2]])
+    var_share_results = calculate_var_shares_linear(species_contribution_table, model_cov = T)
+  } else {
+    var_share_results = rank_based_rsq_contribs(species_contribution_table, met_table, config_table, cmp_mods = model_results)
+  }
+  return(var_share_results)
+}
+
+
 #' Calculates contributions to variance from a contribution table
 #'
 #' @import data.table
 #' @param species_contribution_table Table of species contributions (with residuals)
 #' @param valueVar Column name to use for values
+#' @param model_cov Just calculate covariances with metabolite/response data
+#' @param metVar If model_cov = T, variable name for metabolite concentrations
 #' @return Data table of variance shares by each species in the original table for each metabolite
 #' @examples
-#' calculate_var_shares(species_cmps)
+#' calculate_var_shares_linear(species_cmps)
 #' @export
-calculate_var_shares = function(species_contribution_table, valueVar = "newValue"){ #generic, table of values for each speices and sample and compound
-  spec_list = species_contribution_table[,unique(Species)]
-  spec_table_wide = dcast(species_contribution_table, Sample+compound~Species, value.var = valueVar, fill = 0, fun.aggregate=sum)
-  var_shares = rbindlist(lapply(spec_list, function(y){
-    all1 = rbindlist(lapply(spec_list, function(x){
-      foo = spec_table_wide[,cov(get(x), get(y), use="complete.obs"), by=compound]
-      foo[,Species:=x]
-      return(foo)
+calculate_var_shares_linear = function(species_contribution_table, valueVar = "newValue", model_cov = F){ #generic, table of values for each speices and sample and compound
+  if(!model_cov){
+    spec_list = species_contribution_table[,unique(Species)]
+    spec_table_wide = dcast(species_contribution_table, Sample+compound~Species, 
+                            value.var = valueVar, fill = 0, fun.aggregate=sum)
+    var_shares = rbindlist(lapply(spec_list, function(y){
+      all1 = rbindlist(lapply(spec_list, function(x){
+        foo = spec_table_wide[,cov(get(x), get(y), use="complete.obs"), by=compound]
+        foo[,Species:=x]
+        return(foo)
+      }))
+      all1[,Species2:=y]
     }))
-    all1[,Species2:=y]
-  }))
-  var_shares = var_shares[,sum(V1),by=list(compound, Species)]
+    var_shares = var_shares[,sum(V1),by=list(compound, Species)]
+  } else {
+    species_contribution_table[,totVar:=sum(get(valueVar)), by=list(compound, Sample)] #Total concentrations (must include residuals)
+    var_shares = species_contribution_table[,cov(get(valueVar), totVar), by=list(compound, Species)]
+  }
   tot_vals = species_contribution_table[,sum(get(valueVar)), by = list(compound, Sample)]
   true_met_var = tot_vals[,list(var(V1), mean(V1)), by = compound]
   setnames(true_met_var, c("V1", "V2"), c("Var", "Mean"))
@@ -264,11 +379,282 @@ calculate_var_shares = function(species_contribution_table, valueVar = "newValue
   return(var_shares)
 }
 
+#' Calculates contributions to variance using permutation/subset Shapley analysis for regression fits
+#'
+#' @import data.table
+#' @param species_cmps Table of species contributions (without residuals)
+#' @param mets_melt Table of metabolite concentrations
+#' @param config_table Configuration table including model-fitting settings
+#' @param nperm Number of permutations per decomposition
+#' @param signif_threshold Will only analyze models with a p-value below this threshold
+#' @param return_perm Whether to return full table of permutation results
+#' @return Data table of variance shares by each species in the original table for each metabolite
+#' @examples
+#' run_shapley_contrib_analysis(species_cmps)
+#' @export
+run_shapley_contrib_analysis = function(species_cmps, mets_melt, config_table, nperm = 15000, signif_threshold = 0.01, return_perm = F){
+  if("rankBased" %in% config_table[,V1]){
+    rank_based = T
+    if("rank_type" %in% config_table[,V1]){
+      rank_type = config_table[V1=="rank_type", V2]
+    } else rank_type = "rfit"
+  } else rank_based = F
+  
+  cmp_mods = fit_cmp_mods(species_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
+  mod_fit_true = cmp_mods[[1]][!is.na(Rsq) & PVal < signif_threshold,list(compound, Rsq)]
+  species_cmps = species_cmps[compound %in% mod_fit_true[,compound]]
+  #Fill in 0s
+  species_cmps = melt(dcast(species_cmps, compound+Sample~Species, value.var = "CMP", fill = 0), id.vars = c("compound", "Sample"), variable.name = "Species", value.name = "CMP")
+    
+  spec_list = species_cmps[,sort(unique(as.character(Species)))]
+  nspec = length(spec_list)
+  R1 = sapply(1:nperm, function(x){
+    sample.int(nspec)
+  }) # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
+  
+  allContribs = data.table()
+  for(perm_id in 1:nperm){
+    cumulMetVars = copy(mod_fit_true)
+    setnames(cumulMetVars, "Rsq", "TrueRsq")
+    spec_order = R1[,perm_id]
+    for(j in 1:nspec){
+      if(j < nspec){
+        perm_dat = species_cmps[!Species %in% spec_list[spec_order[1:j]]]
+        #Skip compounds where this species changes nothing - automatically 0
+        zero_comps = species_cmps[Species == spec_list[spec_order[j]], length(CMP[CMP != 0]), by=compound][V1==0, compound]
+        perm_dat = perm_dat[!compound %in% zero_comps]
+        #Fill in 0s for all species even if they don't do anything for that compound
+        #fit model under permutation
+        mod_fit1 = suppressWarnings(suppressMessages(fit_cmp_mods(perm_dat, mets_melt, rank_based = rank_based, rank_type = rank_type)))
+        cumulMetVar = mod_fit1[[1]][,list(compound, Rsq)]
+        cumulMetVars = merge(cumulMetVars, cumulMetVar, by = "compound", all.x = T)
+        if(j==1){
+          cumulMetVars[compound %in% zero_comps, NewRsq:=TrueRsq] #If removing this species did nothing, just keep Rsq from previous species' removal
+        } else {
+          cumulMetVars[compound %in% zero_comps, NewRsq:=get(spec_list[spec_order[j-1]])]
+        }
+        cumulMetVars[is.na(Rsq), Rsq:=0]
+        setnames(cumulMetVars, "Rsq", spec_list[spec_order[j]])
+      } else {
+        cumulMetVars[,(spec_list[spec_order[j]]):=0] 
+      }
+      if(j > 1){
+        cumulMetVars[,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]]) - get(spec_list[spec_order[j]])]
+      } else {
+        cumulMetVars[,paste0("Marg_", spec_list[spec_order[j]]):=TrueRsq - get(spec_list[spec_order[j]])]
+      }
+    }
+    cumulMetVars[,OrderID:=perm_id]
+    cumulMetVars = cumulMetVars[,c("compound","TrueRsq", sort(names(cumulMetVars)[3:ncol(cumulMetVars)])), with=F]
+    allContribs = rbind(allContribs, cumulMetVars, fill = T)
+  }
+  allContribs_mean = allContribs[,lapply(.SD, mean), by=compound, .SDcols = paste0("Marg_", spec_list)]
+  setnames(allContribs_mean, gsub("Marg_", "", names(allContribs_mean)))
+  allContribs_mean = melt(allContribs_mean, variable.name = "Species", id.var = "compound")
+  allContribs_mean = merge(allContribs_mean, mod_fit_true, by = "compound", all = T)
+  if(return_perm){
+    return(list(PermMat = allContribs, Contribs = allContribs_mean))
+  } else {
+    return(allContribs_mean)
+  }
+}
+
+#' Calculates contributions to variance using permutation/subset Shapley analysis for regression fits
+#'
+#' @import data.table
+#' @param species_cmps Table of species contributions (without residuals)
+#' @param mets_melt Table of metabolite concentrations
+#' @param config_table Configuration table including model-fitting settings
+#' @param nperm Number of permutations per decomposition
+#' @param signif_threshold Will only analyze models with a p-value below this threshold
+#' @param return_perm Whether to return full table of permutation results
+#' @return Data table of variance shares by each species in the original table for each metabolite
+#' @examples
+#' run_samp_shapley_analysis(species_cmps)
+#' @export
+run_samp_shapley_analysis = function(species_cmps, mets_melt, config_table, nperm = 15000, signif_threshold = 0.01, return_perm = F){
+  if("rankBased" %in% config_table[,V1]){
+    rank_based = T
+    if("rank_type" %in% config_table[,V1]){
+      rank_type = config_table[V1=="rank_type", V2]
+    } else rank_type = "rfit"
+  } else rank_based = F
+  
+  cmp_mods = fit_cmp_mods(species_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
+  preds_true = species_cmps[compound %in% cmp_mods[[1]][!is.na(Rsq) & PVal < signif_threshold, compound]] ### Wait this doesn't make sense!!
+  species_cmps = species_cmps[compound %in% mod_fit_true[,compound]]
+  #Fill in 0s
+  species_cmps = melt(dcast(species_cmps, compound+Sample~Species, value.var = "CMP", fill = 0), id.vars = c("compound", "Sample"), variable.name = "Species", value.name = "CMP")
+  
+  spec_list = species_cmps[,sort(unique(as.character(Species)))]
+  nspec = length(spec_list)
+  R1 = sapply(1:nperm, function(x){
+    sample.int(nspec)
+  }) # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
+  
+  allContribs = data.table()
+  for(perm_id in 1:nperm){
+    cumulMetVars = copy(mod_fit_true)
+    setnames(cumulMetVars, "Rsq", "TrueRsq")
+    spec_order = R1[,perm_id]
+    for(j in 1:nspec){
+      if(j < nspec){
+        perm_dat = species_cmps[!Species %in% spec_list[spec_order[1:j]]]
+        #Skip compounds where this species changes nothing - automatically 0
+        zero_comps = species_cmps[Species == spec_list[spec_order[j]], length(CMP[CMP != 0]), by=compound][V1==0, compound]
+        perm_dat = perm_dat[!compound %in% zero_comps]
+        #Fill in 0s for all species even if they don't do anything for that compound
+        #fit model under permutation
+        mod_fit1 = suppressWarnings(suppressMessages(fit_cmp_mods(perm_dat, mets_melt, rank_based = rank_based, rank_type = rank_type)))
+        cumulMetVar = mod_fit1[[1]][,list(compound, Rsq)]
+        cumulMetVars = merge(cumulMetVars, cumulMetVar, by = "compound", all.x = T)
+        cumulMetVars[compound %in% zero_comps, Rsq:=ifelse(j==1, TrueRsq, get(spec_list[spec_order[j-1]]))] #If removing this species did nothing, just keep Rsq from previous species' removal
+        cumulMetVars[is.na(Rsq), Rsq:=0]
+        setnames(cumulMetVars, "Rsq", spec_list[spec_order[j]])
+      } else {
+        cumulMetVars[,(spec_list[spec_order[j]]):=0] 
+      }
+      if(j > 1){
+        cumulMetVars[,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]]) - get(spec_list[spec_order[j]])]
+      } else {
+        cumulMetVars[,paste0("Marg_", spec_list[spec_order[j]]):=TrueRsq - get(spec_list[spec_order[j]])]
+      }
+    }
+    cumulMetVars[,OrderID:=perm_id]
+    cumulMetVars = cumulMetVars[,c("compound","TrueRsq", sort(names(cumulMetVars)[3:ncol(cumulMetVars)])), with=F]
+    allContribs = rbind(allContribs, cumulMetVars, fill = T)
+  }
+  allContribs_mean = allContribs[,lapply(.SD, mean), by=compound, .SDcols = paste0("Marg_", spec_list)]
+  setnames(allContribs_mean, gsub("Marg_", "", names(allContribs_mean)))
+  allContribs_mean = melt(allContribs_mean, variable.name = "Species", id.var = "compound")
+  allContribs_mean = merge(allContribs_mean, mod_fit_true, by = "compound", all = T)
+  if(return_perm){
+    return(list(PermMat = allContribs, Contribs = allContribs_mean))
+  } else {
+    return(allContribs_mean)
+  }
+}
+
+
+#' Calculates contributions to variance for Rfit regression models
+#'
+#' @import data.table
+#' @param species_cmps Table of species contributions (without residuals)
+#' @param mets_melt Table of metabolite concentrations
+#' @param config_table Configuration table including model-fitting settings
+#' @param cmp_mods Output of fit_cmp_mods
+#' @param adj_rsq Whether to decompose standard disp rsq or adjusted
+#' @param nperm Number of permutations per decomposition
+#' @param signif_threshold Will only analyze models with a p-value below this threshold
+#' @param merge_low_abund Optional list of low-abundance species, will be merged into single "Other" taxon
+#' @param return_perm Whether to return full table of permutation results
+#' @return Data table of variance shares by each species in the original table for each metabolite
+#' @examples
+#' rank_based_rsq_contribs(species_cmps, mets_melt, config_table)
+#' @export
+rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mods = NULL, adj_rsq = F, nperm = 500, signif_threshold = 0.01, return_perm = F, merge_low_abund = NULL){ #Shapley contribs without re-evaluating the model every time
+  if(is.null(cmp_mods)){
+    cmp_mods = fit_cmp_mods(species_cmps, mets_melt, rank_based = T, rank_type = "rfit")
+  } 
+  if(!adj_rsq){
+    mod_fit_true = cmp_mods[[1]][!is.na(Rsq) & PVal < signif_threshold,list(compound, RsqNoAdj)]
+    setnames(mod_fit_true, "RsqNoAdj", "TrueRsq")
+  } else {
+    mod_fit_true = cmp_mods[[1]][!is.na(Rsq) & PVal < signif_threshold,list(compound, Rsq, Tauhat)]
+    setnames(mod_fit_true, "Rsq", "TrueRsq")
+  }
+  species_cmps = species_cmps[compound %in% mod_fit_true[,compound]]
+  if(length(merge_low_abund) > 0){ #Merge low abundance species into "Other"
+    species_cmps[Species %in% merge_low_abund, NewSpecies:="Other"]
+    species_cmps[!is.na(NewSpecies), Species:=NewSpecies]
+    species_cmps = species_cmps[,sum(CMP), by=list(compound, Species, Sample)]
+    setnames(species_cmps, "V1", "CMP")
+  }
+  #Fill in 0s
+  species_cmps = melt(dcast(species_cmps, compound+Sample~Species, value.var = "CMP", fill = 0), id.vars = c("compound", "Sample"), variable.name = "Species", value.name = "CMP")
+  
+  spec_list = species_cmps[,sort(unique(as.character(Species)))]
+  nspec = length(spec_list)
+  R1 = sapply(1:nperm, function(x){
+    sample.int(nspec)
+  }) # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
+  
+  mod_fit_true[,NullDisp:=sapply(compound, function(x){
+    j.disp.mean(mets_melt[compound==x, value])
+  })]
+  mod_fit_true[,DF2:=sapply(compound, function(x){
+    mets_melt[compound==x & !is.na(value), length(unique(Sample))]-2
+  })]
+  species_cmps = merge(species_cmps, cmp_mods[[1]][,list(compound, Intercept, Slope)], by = "compound", all.x = T)
+  species_cmps[,PredVal:=CMP*Slope+Intercept]
+  species_cmps = merge(species_cmps, mets_melt, by = c("compound", "Sample"), all.x = T)
+    
+  allContribs = data.table()
+  
+  for(perm_id in 1:nperm){
+    cumulMetVars = copy(mod_fit_true)
+    spec_order = R1[,perm_id]
+    for(j in 1:nspec){
+      if(j < nspec){
+        perm_dat = species_cmps[!Species %in% spec_list[spec_order[1:j]]]
+        #Skip compounds where this species changes nothing - automatically 0
+        zero_comps = species_cmps[Species == spec_list[spec_order[j]], length(CMP[CMP != 0]), by=compound][V1==0, compound]
+        perm_dat = perm_dat[!compound %in% zero_comps]
+        #Fill in 0s for all species even if they don't do anything for that compound
+        #fit model under permutation
+        #Calculate new disp
+        tot_pred = perm_dat[,sum(PredVal), by=list(compound, Sample, value)]
+        new_disp = tot_pred[,j.disp.fit(V1, value), by=compound]
+        cumulMetVars = merge(cumulMetVars, new_disp, by = "compound", all.x = T)
+        if(!adj_rsq){
+          cumulMetVars[,NewRsq:=(1-V1/NullDisp)]
+        } else {
+          cumulMetVars[,NewRsq:=j.disp.rsq.adj(NullDisp, model_disp = V1, tauhat = Tauhat, df2 = DF2)]
+        }
+        #cumulMetVars[is.na(NewRsq), NewRsq:=0]
+        setnames(cumulMetVars, "NewRsq", spec_list[spec_order[j]])
+        cumulMetVars[,V1:=NULL]
+        cumulMetVars[compound %in% zero_comps, paste0("Marg_", spec_list[spec_order[j]]):=0] #If removing this species did nothing, just keep Rsq from previous species' removal
+        if(j > 1){
+          cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]])] #Same as previous
+          cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]]) - get(spec_list[spec_order[j]])]
+        } else {
+          cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=TrueRsq] #Same as orig
+          cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=TrueRsq - get(spec_list[spec_order[j]])]
+        }
+      } else { #Final iteration
+        cumulMetVars[,(spec_list[spec_order[j]]):=0] 
+        cumulMetVars[,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]])]
+      }
+    }
+    cumulMetVars[,OrderID:=perm_id]
+    cumulMetVars = cumulMetVars[,c("compound","TrueRsq", sort(names(cumulMetVars)[3:ncol(cumulMetVars)])), with=F]
+    allContribs = rbind(allContribs, cumulMetVars, fill = T)
+  }
+  allContribs_mean = allContribs[,lapply(.SD, mean), by=compound, .SDcols = paste0("Marg_", spec_list)]
+  setnames(allContribs_mean, gsub("Marg_", "", names(allContribs_mean)))
+  allContribs_mean = melt(allContribs_mean, variable.name = "Species", id.var = "compound")
+  allContribs_mean = merge(allContribs_mean, mod_fit_true, by = "compound", all = T)
+  
+  if(return_perm){
+    return(list(PermMat = allContribs, Contribs = allContribs_mean))
+  } else {
+    ## Format like variance contributions
+    print(allContribsMean)
+    allContribsMean[,VarShare:=value/TrueRsq]
+    return(allContribs_mean)
+  }
+}
+
+
+
+#Commonly used color scheme
 getPalette = colorRampPalette(brewer.pal(12, "Paired"))
 
 #' Plot species contributions for a single metabolite
 #'
 #' @import ggplot2
+#' @import data.table
 #' @param varShares Dataset of contributions
 #' @param metabolite Compound to plot
 #' @param include_zeros Whether to plot taxa that do not have any contribution
@@ -276,12 +662,13 @@ getPalette = colorRampPalette(brewer.pal(12, "Paired"))
 #' @examples
 #' plot_contributions(varShares)
 #' @export
-plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F){
+plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F, include_residual = T){
   plot_dat = varShares[get(metIDcol)==metabolite]
   if(!include_zeros) plot_dat = plot_dat[VarShare != 0]
+  if(!include_residual) plot_dat = plot_dat[Species != "Residual"]
   color_pals = c( "black", sample(getPalette(plot_dat[,length(unique(Species))-1])))
   spec_order = plot_dat[Species != "Residual"][order(abs(VarShare), decreasing = T), as.character(Species)]
-  spec_order = c("Residual", spec_order)
+  if(include_residual) spec_order = c("Residual", spec_order)
   print(spec_order)
   plot_dat[,Species:=factor(Species, levels = spec_order)]
   print(plot_dat)
@@ -298,6 +685,7 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
 #' @import ggplot2
 #' @import RColorBrewer
 #' @import cowplot
+#' @import data.table
 #' @param varShares Dataset of contributions
 #' @param include_zeros Whether to plot taxa that do not have any contribution
 #' @param remove_resid_rescale Whether to remove the residual and rescale contributions
@@ -309,19 +697,26 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
 plot_summary_contributions = function(varShares, include_zeros = T, remove_resid_rescale = F, met_id_col = "metID"){
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
+    bad_mets = varShares[Species != "Residual",all(is.na(VarShare)), by=compound][V1==T, compound]
+    varShares = varShares[!compound %in% bad_mets]
   }
   ## Should have a function to calculate font sizes depending on the # of features
   if(met_id_col == "metID" & !"metID" %in% names(varShares)){
     varShares[,metID:=met_names(as.character(compound))]
-    met_order = varShares[Species=="Residual" & !is.na(VarShare) & VarShare != 0][order(VarShare, decreasing = F), metID]
-    varShares = varShares[metID %in% met_order]
-    varShares[,metID:=factor(metID, levels = met_order)]
   } else {
     varShares[,metID:=get(met_id_col)]
+    varShares[is.na(metID), metID:=compound]
   }
+  #Deal with IDs not in the naming database (should probably update this as well at some point)
+  #Order metabolites
+  met_order = varShares[Species=="Residual" & !is.na(VarShare) & VarShare != 0][order(VarShare, decreasing = F), metID]
+  varShares = varShares[metID %in% met_order]
+  varShares[,metID:=factor(metID, levels = met_order)]
+  varShares[,PosNeg:=factor(ifelse(Slope > 0, "Positive", "Negative"), levels = c("Positive", "Negative"))]
+  
   resid_dat = varShares[Species == "Residual"]
   varShares = varShares[Species != "Residual"]
-  spec_order = varShares[,length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = T), Species]
+  spec_order = varShares[,length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = F), Species]
   varShares[,Species2:=factor(as.character(Species), levels = spec_order)]
   if(remove_resid_rescale){
     varShares[,VarShareNoResid:=VarShare/sum(VarShare), by=metID]
@@ -332,13 +727,90 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
     color_lab = "Contribution to variance"
   }
   resid_plot = ggplot(resid_dat, aes(x=metID, y = 1-VarShare)) + geom_bar(stat = "identity") + scale_y_continuous(expand = c(0,0))+ theme_minimal() +
-    theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared")
+    theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared") +
+    facet_grid(~PosNeg, scales = "free_x", space = "free_x")
   plot1 = ggplot(varShares, aes(x=metID, y = Species2)) + geom_tile(aes_string(fill = plot_var)) + theme_minimal() +
-    theme(axis.text.x = element_blank(), axis.line = element_blank(), legend.position = "bottom") +
+    theme(axis.text.x = element_blank(), axis.line = element_blank(), legend.position = "bottom", legend.text = element_text(size = 7)) +
     scale_fill_gradient2(low = brewer.pal(9,"Reds")[9], mid = "white",  high = brewer.pal(9, "Blues")[9], midpoint = 0, name = color_lab) +
-      ylab("Taxon")+xlab("Metabolite")
+      ylab("Taxon")+xlab("Metabolite") + facet_grid(~PosNeg, scales = "free_x", space = "free_x")
   plot_all = plot_grid(resid_plot, plot1, nrow = 2, align = "v", axis = "lr", rel_heights = c(1, 2.5))
   return(plot_all)
+}
+
+#' Plot CMP values vs metabolite concentrations for a single metabolite
+#'
+#' @import ggplot2
+#' @import RColorBrewer
+#' @import cowplot
+#' @import data.table
+#' @param cmp_table Dataset of CMP scores (long format, can be species-specific or added already) for a single metabolite
+#' @param met_table Dataset of metabolite concentrations (long format) for a single metabolite
+#' @param mod_results Optional additional info on model comparison results
+#' @param sample_col Column name for sample column (shared between the tables)
+#' @return plot of contributions
+#' @examples
+#' cmp_met_plot(cmp_scores, mets_melt, mod_results = mods_out[[1]])
+#' @export
+cmp_met_plot = function(cmp_table, met_table, mod_results = NULL, sample_col = "Sample", met_title = NULL){
+  if("Species" %in% names(cmp_table)){
+    cmp_table = cmp_table[,sum(CMP), by=c(sample_col, "compound")]
+    setnames(cmp_table, "V1", "CMP")
+  }
+  m_compare_mets = merge(cmp_table, met_table, by=c(sample_col, "compound"))
+  setnames(m_compare_mets, "value", "Met")
+  if("V1" %in% names(m_compare_mets)) setnames(m_compare_mets, "V1", "CMP")
+  if(m_compare_mets[,length(unique(compound))] > 1) stop("Can only plot 1 metabolite at a time")
+
+  #Separate out by synth only, deg only, both
+  synth_deg = m_compare_mets[,list(sum(CMP > 0), sum(CMP < 0)), by=compound]
+  setnames(synth_deg, c("V1", "V2"), c("SynthSamples", "DegSamples"))
+  m_compare_mets = merge(m_compare_mets, synth_deg, by="compound")
+  m_compare_mets[,CMPType:=ifelse(SynthSamples > 0 & DegSamples==0, "Synth", "Both")]
+  m_compare_mets[,CMPType:=ifelse(DegSamples > 0 & SynthSamples==0, "Deg", CMPType)]
+  
+  if(!is.null(mod_results)){
+    m_compare_mets = merge(m_compare_mets, mod_results, by = "compound", all = T)
+    m_compare_mets[,annotResult:=round(Rsq, 3)] 
+    m_compare_mets[,M2Signif:=ifelse(PVal < 0.01, T, F)]
+  }
+  if(is.null(met_title)) met_title = m_compare_mets[,unique(compound)]
+  
+  met_plot = ggplot(m_compare_mets, aes(x=CMP, y = Met)) + theme(axis.text = element_text(size = 5)) + theme_cowplot() + ggtitle(met_title)
+  if(is.null(mod_results)){
+    met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2)
+  } else {
+    met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2, color = ifelse(m_compare_mets[1,M2Signif], "darkred", "darkblue")) + 
+      geom_abline(slope = mod_results[,Slope], intercept = mod_results[,Intercept], linetype = 2, alpha = 0.6, color = "black") +
+      annotate(geom = "text", label = m_compare_mets[1,annotResult], x = Inf, y = Inf, hjust = 1, vjust = 1, size = 2.5, fontface = "bold") 
+  }
+  return(met_plot)
+}
+
+#' Generate a list of plots of CMP values vs metabolite concentrations for all metabolites
+#'
+#' @import ggplot2
+#' @import RColorBrewer
+#' @import cowplot
+#' @import data.table
+#' @param cmp_table Dataset of CMP scores (long format, can be species-specific or added already) for a single metabolite
+#' @param met_table Dataset of metabolite concentrations (long format) for a single metabolite
+#' @param mod_results Optional additional info on model comparison results
+#' @param sample_col Column name for sample column (shared between the tables)
+#' @return plot of contributions
+#' @examples
+#' plot_all_cmp_mets(varShares)
+#' @export
+plot_all_cmp_mets = function(cmp_table, met_table, mod_results){
+  tot_cmps = cmp_table[Species != "Residual", sum(CMP), by=list(compound, Sample)]
+  setnames(tot_cmps, "V1", "CMP")
+  comp_list = mod_results[!identical(Rsq, NA) &  Rsq != 0][order(PVal), compound]
+  all_cmp_plots = vector("list", length(comp_list))
+  for(i in 1:length(comp_list)){
+    all_cmp_plots[[i]] = cmp_met_plot(tot_cmps[compound==comp_list[i]], met_table[compound==comp_list[i]], 
+                         mod_results = mod_results[compound==comp_list[i]], met_title = met_names(comp_list[i]))
+  }
+  names(all_cmp_plots) = comp_list
+  return(all_cmp_plots)
 }
 
 #' Read in files for a MIMOSA 2 analysis
@@ -503,9 +975,13 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         mod_list = species[,OTU]
       } else if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ ## AGORA or embl_gems
         if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
+          cat("Mapping greengenes OTUs to AGORA...\n")
           species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toAGORA_97_map.txt"))
+          cat(paste0("Mapped to ", nrow(species), " AGORA species"))
         } else { #embl_gems - should rename this function
+          cat("Mapping greengenes OTUs to RefSeq...\n")
           species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toRefSeq_map.txt"))
+          cat(paste0("Mapped to ", nrow(species), " RefSeq species"))
         }
         mod_list = species[!is.na(OTU),OTU]
       } else stop('Model option not implemented')
@@ -750,8 +1226,8 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, re
 #' @param addTable Data.table of taxa, genes and/or reactions to add, or generic genes and reactions to be applied to all taxa
 #' @param target_format Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra". If NULL, will try to guess
 #' @param source_format Format of taxa, genes, and/or reactions to add - must be "KEGG" or "Cobra". If NULL, will try to guess
-#' @param kegg_path
-#' @param data_path
+#' @param kegg_path Path to KEGG database
+#' @param data_path Path to reference data with AGORA-KEGG mappings
 #' @return Expanded network table
 #' @examples
 #' add_to_network(network, netAddTable)
@@ -887,7 +1363,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     missing_param = req_params[!req_params %in% config_table[,V1]]
     stop(paste0("Required parameters missing from configuration file: ", missing_param, "\n"))
   } 
-  all_params = c(req_params, "metagenome","contribType", "gapfill", "metType", "netAdd", "simThreshold", "kegg_prefix", "data_prefix") #Move to package sysdata?
+  all_params = c(req_params, "metagenome","contribType", "metType", "netAdd", "simThreshold", "kegg_prefix", "data_prefix", "vsearch_path") #Move to package sysdata?
   config_table[V2=="", V2:=FALSE]
   if(length(all_params[!all_params %in% config_table[,V1]]) > 0){
     config_table = rbind(config_table, data.table(V1 = all_params[!all_params %in% config_table[,V1]], V2 = FALSE))
@@ -901,11 +1377,12 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #' @param config_table Data.table of input files and settings for MIMOSA analysis
 #' @param species Optionally provide already-read-in species data
 #' @param mets Optionally provide already-read-in metabolite data
+#' @param compare_only Skip contribution calculation, just build and fit model
 #' @return Scaling model and variance contribution results
 #' @examples
 #' run_mimosa2(config_table, species, mets)
 #' @export
-run_mimosa2 = function(config_table, species = "", mets = ""){
+run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
   #process arguments
   if(!identical(species, "") & !identical(mets, "")){
     config_table = check_config_table(config_table, app = T)
@@ -943,9 +1420,17 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   #Get CMP scores
   if("rxnEdit" %in% config_table[,V1]){
     rxn_param = T
+    cat("Will refine reaction network\n")
   } else rxn_param = F
   if("rankBased" %in% config_table[,V1]){
     rank_based = T
+    cat("Will use rank-based/robust regression\n")
+    if("rank_type" %in% config_table[,V1]){
+      rank_type = config_table[V1=="rank_type", V2]
+    } else {
+      rank_type = "rfit"
+    }
+    cat(paste0("Regression type is ", rank_type, "\n"))
   } else rank_based = F
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     no_spec_param = T
@@ -954,20 +1439,24 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
   }
   if("manualAGORA" %in% config_table[,V1]){
     agora_param = T
+    cat("Manual AGORA models\n")
   } else {
     agora_param = F
   }
-  if("revRxns" %in% config_table[,V1]){ #Whether to add reverse of reversible-annotated rxns
-    network = add_rev_rxns(network)
+  if("revRxns" %in% config_table[,V1]){ #Whether to add reverse of reversible-annotated rxns - mainly for agora networks
+    network = add_rev_rxns(network, sameID = T) # Give reverse the same rxn ID
+    cat("Will add reverse of reversible reactions\n")
   }
   # if("refine" %in% config_table[,V1]){
   #   network = refine_rev_rxns(network, )
   # }
   if("met_transform" %in% config_table[,V1]){
     met_transform = config_table[V1=="met_transform", V2]
+    cat(paste0("Will transform metabolite values, transform is ", met_transform))
   } else met_transform = ""
   if("score_transform" %in% config_table[,V1]){
     score_transform = config_table[V1=="score_transform", V2]
+    cat(paste0("Will transform CMP values, transform is ", score_transform))
   } else score_transform = ""
 
   #indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
@@ -986,24 +1475,25 @@ run_mimosa2 = function(config_table, species = "", mets = ""){
       indiv_cmps = transform_cmps(indiv_cmps, score_transform)
     }
     indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
-    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based)
+    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
   }
-  indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
-  var_shares = calculate_var_shares(indiv_cmps)
-  var_shares = merge(var_shares, cmp_mods[[1]], by = "compound", all.x = T)
+  #indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
+  if(!compare_only){ #Option to skip contributions
+    var_shares = calculate_var_shares(indiv_cmps, model_results = cmp_mods, config_table = config_table)
+    var_shares = merge(var_shares, cmp_mods[[1]], by = "compound", all.x = T)
+  } else {
+    var_shares = NULL
+  }
   if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){ #if we have a metagenome as well as 16s
     indiv_cmps2 = get_cmp_scores_kos(species, metagenome_network)
-    cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt)
-    indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
-    var_shares_metagenome = calculate_var_shares(indiv_cmps2)
+    cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt, rank_based = rank_based, rank_type = rank_type)
+    #indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
+    var_shares_metagenome = calculate_var_shares(indiv_cmps2, model_results = cmp_mods, config_table = config_table)
     var_shares_metagenome = merge(var_shares_metagenome, cmp_mods2[[1]], by = "compound", all.x = T)
     return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
   } else {
     return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network))
   }
-  #Order dataset for plotting
-  #met_order = var_shares[Species=="Residual"][order(VarShare, increasing = T), metID]
-  #var_shares[,metID:=factor(metID, levels = metID)]
 
 }
 

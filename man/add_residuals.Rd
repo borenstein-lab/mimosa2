@@ -2,7 +2,7 @@
 % Please edit documentation in R/core_mimosa2_funcs.R
 \name{add_residuals}
 \alias{add_residuals}
-\title{Returns a melted data table of species and their cmps, along with residual contributions}
+\title{Returns a melted data table of species and their scaled cmps (based on model coefficient), along with residual contributions}
 \usage{
 add_residuals(species_cmps, model_dat, resid_dat)
 }
@@ -17,7 +17,7 @@ add_residuals(species_cmps, model_dat, resid_dat)
 A melted data table of species and their CMPs, including "Residual" as an additional species
 }
 \description{
-Returns a melted data table of species and their cmps, along with residual contributions
+Returns a melted data table of species and their scaled cmps (based on model coefficient), along with residual contributions
 }
 \examples{
 add_residuals(species_cmps, mod_results[[1]], mod_results[[2]])

@@ -5,7 +5,8 @@
 \title{Plot species contributions for a single metabolite}
 \usage{
 plot_contributions(varShares, metabolite, metIDcol = "metID",
-  include_zeros = F)
+  include_zeros = F, include_residual = T, merge_threshold = 0.03,
+  color_palette = NULL)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}
@@ -13,6 +14,12 @@ plot_contributions(varShares, metabolite, metIDcol = "metID",
 \item{metabolite}{Compound to plot}
 
 \item{include_zeros}{Whether to plot taxa that do not have any contribution}
+
+\item{include_residual}{Whether to include the residual variation}
+
+\item{merge_threshold}{Threshold at which low-contributing species are merged into "other"}
+
+\item{color_palette}{Color palette to use for taxa in plot}
 }
 \value{
 plot of contributions

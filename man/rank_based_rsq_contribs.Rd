@@ -5,8 +5,9 @@
 \title{Calculates contributions to variance for Rfit regression models}
 \usage{
 rank_based_rsq_contribs(species_cmps, mets_melt, config_table,
-  cmp_mods = NULL, adj_rsq = F, nperm = 500,
-  signif_threshold = 0.01, return_perm = F, merge_low_abund = NULL)
+  cmp_mods = NULL, adj_rsq = F, nperm = 0, nperm_taxa = 5,
+  signif_threshold = 0.1, return_perm = F, merge_low_abund = NULL,
+  add_residual = F, nperm_max = 200)
 }
 \arguments{
 \item{species_cmps}{Table of species contributions (without residuals)}
@@ -26,6 +27,10 @@ rank_based_rsq_contribs(species_cmps, mets_melt, config_table,
 \item{return_perm}{Whether to return full table of permutation results}
 
 \item{merge_low_abund}{Optional list of low-abundance species, will be merged into single "Other" taxon}
+
+\item{add_residual}{Whether to add the residual as an additional contributor at the end}
+
+\item{nperm_max}{Maximum # of random orderings to do, regardless of the # of taxa (default 1500)}
 }
 \value{
 Data table of variance shares by each species in the original table for each metabolite

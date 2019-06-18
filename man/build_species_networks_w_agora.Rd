@@ -7,7 +7,7 @@ June 2018
 Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
 \usage{
 build_species_networks_w_agora(mod_list, usePreprocessed = T,
-  agora_path = "data/AGORA/", remove_sinks = T)
+  agora_path = "data/AGORA/", remove_sinks = T, add_rev = T)
 }
 \arguments{
 \item{usePreprocessed}{Whether to process .mat files or use pre-computed versions}
@@ -15,6 +15,8 @@ build_species_networks_w_agora(mod_list, usePreprocessed = T,
 \item{agora_path}{Path to AGORA models}
 
 \item{remove_sinks}{Remove reactions that have NA as a substrate or product (usually uninformative transporters etc)}
+
+\item{add_rev}{Whether to add reverse of reversible reactions (default = T)}
 
 \item{species_list}{List of species from mapping}
 }

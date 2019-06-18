@@ -5,7 +5,7 @@
 \title{Wrapper function to calculate contributions to variance, specific method depends on configuration}
 \usage{
 calculate_var_shares(species_contribution_table, met_table, model_results,
-  config_table, valueVar = "newValue")
+  config_table, valueVar = "newValue", species_merge = NULL)
 }
 \arguments{
 \item{species_contribution_table}{Table of species contributions (with residuals)}

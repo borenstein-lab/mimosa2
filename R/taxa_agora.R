@@ -8,11 +8,12 @@
 #' @param usePreprocessed Whether to process .mat files or use pre-computed versions
 #' @param agora_path Path to AGORA models
 #' @param remove_sinks Remove reactions that have NA as a substrate or product (usually uninformative transporters etc)
+#' @param add_rev Whether to add reverse of reversible reactions (default = T)
 #' @return A list with 2 entries - one a species abundance table in terms of the new species, the second a table of reactions for each species
 #' @examples
 #' build_species_networks_w_agora(species_table, "Greengenes 13_5 or 13_8", simThreshold = 0.99)
 #' @export
-build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_path = "data/AGORA/", remove_sinks = T){
+build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_path = "data/AGORA/", remove_sinks = T, add_rev = T){
   #Now load AGORA models
   if(usePreprocessed == F){
     agora_mods = load_agora_models(mod_list, agora_path = agora_path) #This takes a long time
@@ -25,6 +26,7 @@ build_species_networks_w_agora = function(mod_list, usePreprocessed = T, agora_p
   }
   setnames(agora_mats, "Species", "OTU")
   if(remove_sinks) agora_mats = agora_mats[!is.na(Prod) & !is.na(Reac)]
+  if(add_rev) agora_mats = add_rev_rxns(agora_mats, sameID = T)
   return(agora_mats)
 }
 

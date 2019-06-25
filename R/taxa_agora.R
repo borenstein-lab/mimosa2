@@ -241,25 +241,40 @@ build_model_components = function(all_mods, species_names, remove_rev = T, missi
 #' @import data.table
 #' @param otus GG or SILVA OTU abundance table
 #' @param database Greengenes or SILVA
-#' @param gg_file_path File path to output of gg->agora vsearch mappings
-#' @param silva_file_path File path to output of silva->agora vsearch mappings
+#' @param target_db AGORA or RefSeq
+#' @param gg_file_prefix File path to output of gg->db vsearch mappings
+#' @param silva_file_prefix File path to output of silva->db vsearch mappings
+#' @param agora_file_suffix File path to output of xx-> agora vsearch mappings
+#' @param refseq_file_suffix File path to output of xx->refseq vsearch mappings
 #' @examples
-#' otus_to_agora(otu_list)
+#' otus_to_db(otu_list)
 #' @return List of AGORA species to use for model building
 #' @export
-otus_to_agora = function(otus, database = "Greengenes", gg_file_path = "data/rep_seqs/gg_13_8_99_toAGORA_97_map.txt", silva_file_path = "data/rep_seqs/silva_132_99_toAGORA_97_map.txt"){
+otus_to_db = function(otus, database = "Greengenes", target_db = "AGORA", gg_file_prefix = "data/rep_seqs/gg_13_8_99", 
+                      silva_file_prefix = "data/rep_seqs/silva_132_99", agora_file_suffix ="_toAGORA_97_map.txt", refseq_file_suffix = "_toRefSeq_97_map.txt"){
   if(database == "Greengenes"){
-    map_table = fread(gg_file_path, colClasses = "character")
+    file_prefix = gg_file_prefix
   } else if(database == "SILVA"){
-    map_table = fread(silva_file_path, colClasses = "character")
+    file_prefix = silva_file_prefix
   } else {
-    stop("Database option not found")
+    stop("OTU database option not found")
   }
+  if(target_db == "AGORA"){
+    file_suffix = agora_file_suffix
+    spec_var = "AGORA_ID"
+  } else if(target_db == "RefSeq"){
+    file_suffix = refseq_file_suffix
+    spec_var = "ModelID"
+  } else {
+    stop("Target genome database option not found")
+  }
+  map_table = fread(paste0(file_prefix, file_suffix), colClasses = "character")
+  
   species_melt = melt(otus, id.var = "OTU", variable.name = "Sample")
   species_melt[,OTU:=as.character(OTU)]
-  species_melt = merge(species_melt, map_table, all.x = T)
-  new_species = dcast(species_melt[,sum(value), by=list(AGORA_ID, Sample)], AGORA_ID~Sample, fill = 0)
-  setnames(new_species, "AGORA_ID", "OTU")
+  species_melt = merge(species_melt, map_table, all.x = T, by = "OTU")
+  new_species = dcast(species_melt[,sum(value), by=c(spec_var, "Sample")], formula = paste0(spec_var, "~Sample"), fill = 0)
+  setnames(new_species, spec_var, "OTU")
   return(new_species)
 }
 

@@ -1022,11 +1022,11 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
       } else if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ ## AGORA or embl_gems
         if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
           cat("Mapping greengenes OTUs to AGORA...\n")
-          species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toAGORA_97_map.txt"))
+          species = otus_to_db(species, target_db = "AGORA", gg_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99"))
           cat(paste0("Mapped to ", nrow(species), " AGORA species"))
         } else { #embl_gems - should rename this function
           cat("Mapping greengenes OTUs to RefSeq...\n")
-          species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99_toRefSeq_map.txt"))
+          species = otus_to_db(species, target_db = "RefSeq", gg_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99"))
           cat(paste0("Mapped to ", nrow(species), " RefSeq species"))
         }
         mod_list = species[!is.na(OTU),OTU]
@@ -1034,9 +1034,9 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
     } else if(config_table[V1=="database", V2==get_text("database_choices")[3]]){ # SILVA
       if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ # AGORA
         if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
-          species = otus_to_agora(species, "SILVA", silva_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99_toAGORA_97_map.txt"))
+          species = otus_to_db(species, database = "SILVA", target_db = "AGORA", silva_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99"))
         } else { #Embl_gems
-          species = otus_to_agora(species, gg_file_path = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_toRefSeq_map.txt"))
+          species = otus_to_db(species, database = "SILVA", target_db = "RefSeq", silva_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99"))
         }
         mod_list = species[!is.na(OTU), OTU]
       } else stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")

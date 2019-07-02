@@ -1045,7 +1045,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         samps = names(species)[!names(species) %in% c("OTU", "seqID")]
         new_species = merge(species, seq_results, by = "seqID", all.x=T)
         new_species = new_species[,lapply(.SD, sum), by=ModelID, .SDcols = samps]
-        new_species[is.na(ModelID), Model:="Other"]
+        new_species[is.na(ModelID), ModelID:="Other"]
         setnames(new_species, "ModelID", "OTU")
         mod_list = seq_results[,unique(ModelID)]
         species = new_species

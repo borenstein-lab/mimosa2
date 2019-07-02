@@ -489,9 +489,9 @@ simpleCap <- function(x) {
         sep = "", collapse = " ")
 }
 
-#' Defaults for NULL values
-#' @export
-`%||%` <- function(a, b) if (is.null(a)) b else a
+# #' Defaults for NULL values
+# #' @export
+#`%||%` <- function(a, b) if (is.null(a)) b else a
 
 
 #' Get text constants used for MIMOSA interactive app from sysdata
@@ -526,12 +526,24 @@ randomString <- function() { #5 random letters and 5 random numbers
 # environment(guides_merge) <- environment(ggplot)
 # assignInNamespace("guides_merge", guides_merge, pos = "package:ggplot2")
 #
-# g_legend<-function(a.gplot){
-#   tmp <- ggplot_gtable(ggplot_build(a.gplot))
-#   leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
-#   legend <- tmp$grobs[[leg]]
-#   return(legend)}
-#
+
+#' Get legend from a ggplot2 object
+#'
+#' @import ggplot2
+#' @param a.gplot 
+#'
+#' @return ggplot2 legend object
+#' @export
+#'
+#' @examples
+#' g_legend(my_plot)
+g_legend<-function(a.gplot){
+  tmp <- ggplot_gtable(ggplot_build(a.gplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
 # g_title = function(b.gplot){
 #   tmp <- ggplot_gtable(ggplot_build(b.gplot))
 #   title_i <- which(sapply(tmp$grobs, function(x){grepl("plot.title", x$name)}))

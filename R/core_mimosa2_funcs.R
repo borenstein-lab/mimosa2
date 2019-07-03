@@ -898,11 +898,11 @@ read_mimosa2_files = function(file_list, configTable, app = T){
   if(configTable[V1=="database", V2 != get_text("database_choices")[4]]){ #Not metagenome-only
     if(app){
       if(!is.null(file_list[["file1"]]$datapath)){
-        species = fread(file_list[["file1"]]$datapath)
+        species = fread(file_list[["file1"]]$datapath, header = T)
       } else {
         stop("Missing species file, wrong option specified?")
       }
-    } else species = fread(file_list[["file1"]])
+    } else species = fread(file_list[["file1"]], header = T)
     species = spec_table_fix(species)
     #Filter species using default abundance values
     if(configTable[V1=="specNzeroFrac", is.numeric(V2)]){
@@ -920,16 +920,16 @@ read_mimosa2_files = function(file_list, configTable, app = T){
   } else {
     #Read metagenome file and hold it as species if we are using it for that
     if(app){
-      species = fread(file_list[["metagenome"]]$datapath)
+      species = fread(file_list[["metagenome"]]$datapath, header = T)
     } else {
-      species = fread(file_list[["metagenome"]])
+      species = fread(file_list[["metagenome"]], header = T)
     }
     if("metagenome_format" %in% configTable[,V1]){
       if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]]){
         if(app){
-          species = fread(file_list[["metagenome"]]$datapath)
+          species = fread(file_list[["metagenome"]]$datapath, header = T)
         } else {
-          species = fread(file_list[["metagenome"]])
+          species = fread(file_list[["metagenome"]], header = T)
           species = humann2_format_contributions(file_list[["metagenome"]])
         }
         if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
@@ -945,7 +945,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     humann2_metagenome = F
   }
   #Read metabolites
-  if(app) mets = fread(file_list[["file2"]]$datapath) else mets = fread(file_list[["file2"]])
+  if(app) mets = fread(file_list[["file2"]]$datapath, header = T) else mets = fread(file_list[["file2"]], header = T)
   met_nonzero_filt = ifelse(configTable[V1=="metNzeroFilter", is.numeric(V2)], configTable[V1=="metNzeroFilter", V2], 5)
   mets = met_table_fix(mets, met_nonzero_filt)
   if(humann2_metagenome == F) shared_samps = intersect(names(species), names(mets)) else {
@@ -1522,7 +1522,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
   }
   #if non-species metagenome is provided, set compare_only flag
   if(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]]){
-    config_table[V1=="compare_only", V2:=TRUE]    
+    config_table[V1=="compare_only", V2:="TRUE"]    
   }
   return(config_table)
 }

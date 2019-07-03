@@ -10,9 +10,17 @@
 #' @export
 spec_table_fix = function(species_table){
   otu_col = names(species_table)[names(species_table) %in% c("OTU", "#OTU ID", "Sequence", "ASV")]
-  if(length(otu_col) != 1) stop("Species data must have a valid OTU/sequence column name")
+  if(length(otu_col) != 1) stop("Species data must have a valid OTU/sequence column name, one of: OTU/#OTU ID/Sequence/ASV")
   setnames(species_table, otu_col, "OTU")
   species_table = species_table[rowSums(species_table[,names(species_table) != "OTU", with=F]) > 0]
+  if(any(duplicated(species_table[,OTU]))){ #Deal with duplicated features
+    dup_otus = species_table[duplicated(OTU), OTU]
+    for(k in 1:length(dup_otus)){
+      dup_rows = species_table[,which(OTU==dup_otus[k])]
+      species_table = species_table[-dup_rows[2:length(dup_rows)]] #Remove rows
+      warning(paste0(dup_otus[k], " is specified in ", length(dup_rows), " rows of the microbiome table. Duplicate features are not allowed; all rows with this feature after the first one will be removed"))
+    }
+  }
   return(species_table)
 }
 
@@ -27,7 +35,7 @@ spec_table_fix = function(species_table){
 #' @export
 met_table_fix = function(met_table, nzero_filt = 5){
   met_col_name = names(met_table)[names(met_table) %in% c("compound", "KEGG", "Compound", "metabolite", "Metabolite")]
-  if(length(met_col_name) != 1) stop("Ambiguous metabolite ID column name, must be one of Compound/compound/KEGG/Metabolite/metabolite")
+  if(length(met_col_name) != 1) stop("Ambiguous metabolite ID column name, must be one of: Compound/compound/KEGG/Metabolite/metabolite")
   setnames(met_table, met_col_name, "compound")
   #Set NAs to 0
   for(j in names(met_table)){
@@ -36,6 +44,15 @@ met_table_fix = function(met_table, nzero_filt = 5){
   met_table = met_table[apply(met_table[,names(met_table) != "compound", with=F], 1, function(x){
     return(length(x[x != 0]) >= nzero_filt)
   })]
+  if(any(duplicated(met_table[,compound]))){ #Deal with duplicated features
+    dup_mets = met_table[duplicated(compound), compound]
+    for(k in 1:length(dup_mets)){
+      dup_rows = met_table[,which(compound==dup_mets[k])]
+      met_table = met_table[-dup_rows[2:length(dup_rows)]] #Remove rows
+      warning(paste0(dup_mets[k], " is specified in ", length(dup_rows), " rows of the metabolite table. Duplicate features are not allowed; all rows with this feature after the first one will be removed"))
+    }
+  }
+  
   return(met_table)
 }
 

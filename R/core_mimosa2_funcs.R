@@ -89,7 +89,7 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "mb
 #' get_analysis_summary(input_species, species, mets, network, cmps, mod_results, contributions, config_table)
 get_analysis_summary = function(input_species, species, mets, network, indiv_cmps, cmp_mods, var_shares, config_table, pval_threshold = 0.1){
   #Sample size
-  if(identical(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[2]])){
+  if(identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[2])){
     sample_size = length(intersect(species[,unique(Sample)], names(mets)))
   } else {
     sample_size = length(intersect(names(species), names(mets)))
@@ -103,16 +103,26 @@ get_analysis_summary = function(input_species, species, mets, network, indiv_cmp
   } else {
     num_mets_network = length(mets[compound %in% network[,Reac]|compound %in% network[,Prod], compound])
   }
-  #Get number of metabolites with preds
+  #Get number of metabolites with pred
   mets_pred = indiv_cmps[,length(unique(compound))]
   #num metabolite models fit
-  mets_mod = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0, length(unique(compound))]
-  #num signif metabolites
-  mets_signif = cmp_mods[[1]][PVal < pval_threshold, length(compound)]
+  if(nrow(cmp_mods[[1]][!is.na(Rsq) & Rsq != 0]) > 0){
+    mets_mod = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0, length(unique(compound))]
+    #num signif metabolites
+    mets_signif = cmp_mods[[1]][PVal < pval_threshold, length(compound)]
+  } else { 
+    mets_mod = 0 
+    mets_signif = 0
+  }
   #Num metabolites contributors analyzed
-  mets_contrib = var_shares[,length(unique(compound))]
-  #Num unique contributor taxa
-  taxa_contrib = var_shares[VarShare != 0 & Species != "Residual",length(unique(Species))]
+  if(!is.null(var_shares)){
+    mets_contrib = var_shares[,length(unique(compound))]
+    #Num unique contributor taxa
+    taxa_contrib = var_shares[VarShare != 0 & Species != "Residual",length(unique(Species))]
+  } else {
+    mets_contrib = 0
+    taxa_contrib = 0
+  }
   summary_table = data.table(Stat = c("Sample size with complete data", "Original number of taxa", "Number of mapped taxa", 
                                       "Number of metabolites in network model", "Number of metabolites with CMP scores", 
                                       "Number of metabolites with nonzero model fits", paste0("Number of significant (p <", pval_threshold, ") metabolites"), 
@@ -975,8 +985,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     } else {
       species = fread(file_list[["metagenome"]], header = T)
     }
-  }
-    if("metagenome_format" %in% configTable[,V1]){
+    if(configTable[V1=="metagenome_format", V2] %in% get_text("metagenome_options")){ #If we have metagenome data
       if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]]){ #stratified
         if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
            species = humann2_format_contributions(species, file_read = T)
@@ -991,6 +1000,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
         }
       }
     }
+  }
   #Save option to use for everything else
   if("metagenome_format" %in% configTable[,V1]){
     humann2_metagenome = ifelse(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]] & configTable[V1=="database", V2==get_text("database_choices")[4]], T, F)

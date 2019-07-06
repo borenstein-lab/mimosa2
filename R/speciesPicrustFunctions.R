@@ -67,7 +67,7 @@ met_table_fix = function(met_table, nzero_filt = 5){
 #' @examples
 #' filter_species_abunds(species_dat)
 #' @export
-filter_species_abunds = function(species_dat, filter_type = "mean", minMeanAbund = 0.001, minSampFrac = 0.01){
+filter_species_abunds = function(species_dat, filter_type = "mean", minMeanAbund = 0, minSampFrac = 0){ #0.001, 0.01 previously
   species2 = melt(species_dat, id.vars = "OTU")
   species2[,relAbund:=value/sum(value), by=variable]
   if(filter_type=="mean"){

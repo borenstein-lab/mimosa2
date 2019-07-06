@@ -25,5 +25,5 @@ Suggests:
     KEGGREST,
     readr,
     testthat
-RoxygenNote: 6.1.0
+RoxygenNote: 6.1.1
 LinkingTo: Rcpp

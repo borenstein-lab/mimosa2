@@ -173,6 +173,7 @@ test_results_normal = function(config_table, file_prefix){
       }
     }
   }
+  #plot_summary_contributions(plotData, include_zeros = T, remove_resid_rescale = F) - add this next
   expect_output(run_mimosa2(config_table))
 }
 
@@ -227,7 +228,7 @@ test_that("Greengenes OTUs -> AGORA species, KEGG add", {
 test_that("Non-KEGG metabolites", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="file2", V2:="test_mets_names.txt"]
-  config1 = rbind(config1, data.table(V1="metType", V2=get_text("met_type_choices")[2]))
+  config1[V1=="metType", V2:=get_text("met_type_choices")[2]]
   test_results_normal(config1, file_prefix = "mets_names")
 })
 

@@ -71,6 +71,57 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "mb
     return(list(model_dat, resid_dat))
 }
 
+#' Calculate general summary statistics on the results of a MIMOSA analysis
+#'
+#' @param input_species
+#' @param species 
+#' @param mets 
+#' @param network
+#' @param indiv_cmps 
+#' @param cmp_mods 
+#' @param var_shares 
+#' @param config_table 
+#'
+#' @return Table of summary statistics (1st column is description, 2nd column is value)
+#' @export
+#'
+#' @examples
+#' get_analysis_summary(input_species, species, mets, network, cmps, mod_results, contributions, config_table)
+get_analysis_summary = function(input_species, species, mets, network, indiv_cmps, cmp_mods, var_shares, config_table, pval_threshold = 0.1){
+  #Sample size
+  if(identical(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[2]])){
+    sample_size = length(intersect(species[,unique(Sample)], names(mets)))
+  } else {
+    sample_size = length(intersect(names(species), names(mets)))
+  }
+  #1 get number of species mapped
+  species_mapped = nrow(species)
+  species_orig = nrow(input_species)
+  # get number of metabolites in network
+  if("KEGGReac" %in% names(network)){ # If bigg IDs
+    num_mets_network = length(mets[compound %in% network[grepl("[e]", Reac, fixed = T),KEGGReac]|compound %in% network[grepl("[e]", Prod, fixed = T), KEGGProd], compound])
+  } else {
+    num_mets_network = length(mets[compound %in% network[,Reac]|compound %in% network[,Prod], compound])
+  }
+  #Get number of metabolites with preds
+  mets_pred = indiv_cmps[,length(unique(compound))]
+  #num metabolite models fit
+  mets_mod = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0, length(unique(compound))]
+  #num signif metabolites
+  mets_signif = cmp_mods[[1]][PVal < pval_threshold, length(compound)]
+  #Num metabolites contributors analyzed
+  mets_contrib = var_shares[,length(unique(compound))]
+  #Num unique contributor taxa
+  taxa_contrib = var_shares[VarShare != 0 & Species != "Residual",length(unique(Species))]
+  summary_table = data.table(Stat = c("Sample size with complete data", "Original number of taxa", "Number of mapped taxa", 
+                                      "Number of metabolites in network model", "Number of metabolites with CMP scores", 
+                                      "Number of metabolites with nonzero model fits", paste0("Number of significant (p <", pval_threshold, ") metabolites"), 
+                                      "Number of metabolites with analyzed taxa contributors", "Number of contributor species"), 
+                             Value = c(sample_size, species_orig, species_mapped, num_mets_network, mets_pred, mets_mod, mets_signif, 
+                                       mets_contrib, taxa_contrib))
+  return(summary_table)
+}
+
 #' Adjusted R-squared for a rank-based model
 #' 
 #' @import Rfit
@@ -907,7 +958,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     #Filter species using default abundance values
     if(configTable[V1=="specNzeroFrac", is.numeric(V2)]){
       print(configTable[V1=="specNzeroFrac"])
-      species = filter_species_abunds(species, filter_type = "fracNonzero", configTable[V1=="specNzeroFrac", V2])
+      species = filter_species_abunds(species, filter_type = "fracNonzero", minSampFrac = configTable[V1=="specNzeroFrac", V2])
     } else { #Use default values
       species = filter_species_abunds(species, filter_type = "fracNonzero")
     }
@@ -924,20 +975,22 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     } else {
       species = fread(file_list[["metagenome"]], header = T)
     }
+  }
     if("metagenome_format" %in% configTable[,V1]){
-      if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]]){
-        if(app){
-          species = fread(file_list[["metagenome"]]$datapath, header = T)
-        } else {
-          species = fread(file_list[["metagenome"]], header = T)
-          species = humann2_format_contributions(file_list[["metagenome"]])
-        }
+      if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]]){ #stratified
         if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
-          species = humann2_format_contributions(species, file_read = T)
+           species = humann2_format_contributions(species, file_read = T)
+        }
+      } else { #Unstratified
+        if(!"KO" %in% names(species)){
+          if("function" %in% names(species)){
+            setnames(species, "function", "KO")
+          } else {
+            stop("Invalid column name in KO data, must be either KO or function")
+          }
         }
       }
     }
-  }
   #Save option to use for everything else
   if("metagenome_format" %in% configTable[,V1]){
     humann2_metagenome = ifelse(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]] & configTable[V1=="database", V2==get_text("database_choices")[4]], T, F)
@@ -975,9 +1028,11 @@ read_mimosa2_files = function(file_list, configTable, app = T){
       dat_list[[extraFile]] = species
     }
   }
-  if("metagenome_format" %in% configTable[,V1]){
+  if("metagenome_format" %in% configTable[,V1]){ # TO do either check col name or ignore this option
     if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]] & configTable[V1=="database", V2 != get_text("database_choices")[4]] & "metagenome" %in% names(dat_list)){
-      dat_list$metagenome = humann2_format_contributions(dat_list$metagenome, file_read = T)
+      if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
+        dat_list$metagenome = humann2_format_contributions(dat_list$metagenome, file_read = T)
+      }
     }
   }
   if("metagenome" %in% names(dat_list) & configTable[V1=="database", V2 != get_text("database_choices")[4]]){ #extra metagenome

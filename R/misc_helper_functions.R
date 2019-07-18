@@ -388,7 +388,7 @@ basic_correlation_matrix = function(species, mets, method="pearson"){
 #' @param x File path to plot image
 #' @return Image URI
 #' @export
-img_uri <- function(x) { sprintf('<img src="%s"/>', knitr::image_uri(x)) }
+img_uri <- function(x) { sprintf('<img height="200" width="200" src="%s" />', knitr::image_uri(x)) }
 
 ##Functions for selecting approximate compound identifications based on MetaboSearch output
 select_best_id2 = function(met_table2, met_data, net_compounds, final_method = "first"){ ###no retention time, swedish data format

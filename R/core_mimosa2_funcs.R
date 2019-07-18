@@ -98,6 +98,7 @@ get_analysis_summary = function(input_species, species, mets, network, indiv_cmp
   species_mapped = nrow(species)
   species_orig = nrow(input_species)
   # get number of metabolites in network
+  mets_orig = nrow(mets)
   if("KEGGReac" %in% names(network)){ # If bigg IDs
     num_mets_network = length(mets[compound %in% network[grepl("[e]", Reac, fixed = T),KEGGReac]|compound %in% network[grepl("[e]", Prod, fixed = T), KEGGProd], compound])
   } else {
@@ -124,10 +125,10 @@ get_analysis_summary = function(input_species, species, mets, network, indiv_cmp
     taxa_contrib = 0
   }
   summary_table = data.table(Stat = c("Sample size with complete data", "Original number of taxa", "Number of mapped taxa", 
-                                      "Number of metabolites in network model", "Number of metabolites with CMP scores", 
+                                      "Original number of metabolites", "Number of metabolites in network model", "Number of metabolites with CMP scores", 
                                       "Number of metabolites with nonzero model fits", paste0("Number of significant (p <", pval_threshold, ") metabolites"), 
                                       "Number of metabolites with analyzed taxa contributors", "Number of contributor species"), 
-                             Value = c(sample_size, species_orig, species_mapped, num_mets_network, mets_pred, mets_mod, mets_signif, 
+                             Value = c(sample_size, species_orig, species_mapped, mets_orig, num_mets_network, mets_pred, mets_mod, mets_signif, 
                                        mets_contrib, taxa_contrib))
   return(summary_table)
 }

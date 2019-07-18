@@ -31,7 +31,13 @@ test_results_normal = function(config_table, file_prefix){
   expect_true("compound" %in% names(mets))
   if(config_table[V1=="metType", V2!=get_text("met_type_choices")[2]]) expect_equal(get_compound_format(mets[,compound]), "KEGG")
   if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_equal(nrow(species[is.na(OTU)]), 0) else {
-    expect_equal(nrow(species[is.na(KO)]), 0)
+    if(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]]){
+      expect_equal(nrow(species[is.na(KO)]), 0)
+    } else {
+      expect_equal(nrow(species[is.na(Gene)]), 0)
+      expect_equal(nrow(species[is.na(Sample)]), 0)
+      expect_equal(nrow(species[is.na(OTU)]), 0)
+    }
   }
   expect_equal(nrow(mets[is.na(compound)]), 0)
   network_results = build_metabolic_model(species, config_table, netAdd = data_inputs$netAdd)
@@ -113,7 +119,7 @@ test_results_normal = function(config_table, file_prefix){
   expect_gt(nrow(indiv_cmps), 0)
   print(head(indiv_cmps))
   expect_setequal(names(indiv_cmps), c("Species", "Sample","compound", "CMP", "NumSynthGenes", "NumSynthSpecies","NumSynthSpecGenes", "NumDegGenes","NumDegSpecies","NumDegSpecGenes"))
-  expect_setequal(indiv_cmps[,unique(Sample)], names(mets)[names(mets) != "compound"])
+  #expect_setequal(indiv_cmps[,unique(Sample)], names(mets)[names(mets) != "compound"])
   expect_true(indiv_cmps[,all(is.numeric(CMP))])
   expect_equal(nrow(indiv_cmps[is.na(compound)]), 0)
   expect_equal(nrow(indiv_cmps[is.na(Species)]), 0)
@@ -163,16 +169,16 @@ test_results_normal = function(config_table, file_prefix){
     met_contrib_plots = NULL
   }
   #Get shared legend
-  if(!config_table[V1 == "compare_only", identical(V2, TRUE)]){
-    for(i in 1:length(met_contrib_plots)){
-      print(comp_list[i])
-      if(!is.null(met_contrib_plots[[i]])){
-        if(!exists("contrib_legend")){ #Get legend from first non-nulll compound
-          contrib_legend = g_legend(met_contrib_plots[[i]])
-        }
-      }
-    }
-  }
+  # if(!config_table[V1 == "compare_only", identical(V2, TRUE)]){
+  #   for(i in 1:length(met_contrib_plots)){
+  #     print(comp_list[i])
+  #     if(!is.null(met_contrib_plots[[i]])){
+  #       if(!exists("contrib_legend")){ #Get legend from first non-nulll compound
+  #         contrib_legend = get_legend(met_contrib_plots[[i]])
+  #       }
+  #     }
+  #   }
+  # }
   #plot_summary_contributions(plotData, include_zeros = T, remove_resid_rescale = F) - add this next
   expect_output(run_mimosa2(config_table))
 }
@@ -301,4 +307,14 @@ test_that("Metagenome option works", {
   test_results_normal(config1, file_prefix = "test_metagenome")
 })
 
+test_that("Metagenome stratified option works", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="database", V2:=get_text("database_choices")[4]]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1 = config1[V1 != "file1"]
+  config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_contributions.txt", get_text("metagenome_options")[2])))
+  config1[V1=="file2", V2:="test_mets.txt"]
+  config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_metagenome_stratified")
+})
 

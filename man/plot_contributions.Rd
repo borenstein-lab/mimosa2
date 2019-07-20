@@ -5,7 +5,7 @@
 \title{Plot species contributions for a single metabolite}
 \usage{
 plot_contributions(varShares, metabolite, metIDcol = "metID",
-  include_zeros = F, include_residual = T, merge_threshold = 0.03,
+  include_zeros = F, include_residual = F, merge_threshold = 0.03,
   color_palette = NULL)
 }
 \arguments{

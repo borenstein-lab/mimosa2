@@ -776,7 +776,7 @@ getPalette = colorRampPalette(brewer.pal(12, "Paired"))
 #' @examples
 #' plot_contributions(varShares)
 #' @export
-plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F, include_residual = T, merge_threshold = 0.03, color_palette = NULL){
+plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F, include_residual = F, merge_threshold = 0.03, color_palette = NULL){
   plot_dat = varShares[get(metIDcol)==metabolite]
   if(nrow(plot_dat)==0){
     warning(paste0("No taxonomic contribution data for ", metabolite, "\n"))
@@ -806,7 +806,8 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
   print(plot_dat)
   ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_manual(values = color_pals) + geom_abline(intercept = 0, slope = 0, linetype = 2) +
     theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=7), axis.text.y = element_blank(),
-          legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), axis.title.x = element_text(size = 10), legend.text = element_text(size=10),
+          legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), axis.title.x = element_text(size = 10), 
+          legend.text = element_text(size=10), plot.title = element_text(face = "plain", size = 11),
           panel.spacing = unit(0.15, "inches"), plot.margin = margin(0.2, 0.4, 0.3, 0.1, "inches"), legend.position = "bottom", legend.key.size = unit(0.25, "inches")) +
     ylab("Contribution to variance") + xlab("Taxon") +  coord_flip() + ggtitle(metabolite)#
 
@@ -907,7 +908,9 @@ cmp_met_plot = function(cmp_table, met_table, mod_results = NULL, sample_col = "
   }
   if(is.null(met_title)) met_title = m_compare_mets[,unique(compound)]
   
-  met_plot = ggplot(m_compare_mets, aes(x=CMP, y = Met)) + theme_cowplot() + theme(axis.text = element_text(size = 4), axis.title = element_text(size = 9))  + ggtitle(met_title)
+  met_plot = ggplot(m_compare_mets, aes(x=CMP, y = Met)) + theme_cowplot() + 
+    theme(axis.text = element_text(size = 4), axis.title = element_text(size = 9), plot.title = element_text(face = "plain", size = 11))  + 
+    ggtitle(met_title)
   if(is.null(mod_results)){
     met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2)
   } else {

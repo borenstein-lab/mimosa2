@@ -127,7 +127,7 @@ get_analysis_summary = function(input_species, species, mets, network, indiv_cmp
   summary_table = data.table(Stat = c("Sample size with complete data", "Original number of taxa", "Number of mapped taxa", 
                                       "Original number of metabolites", "Number of metabolites in network model", "Number of metabolites with CMP scores", 
                                       "Number of metabolites with nonzero model fits", paste0("Number of significant (p <", pval_threshold, ") metabolites"), 
-                                      "Number of metabolites with analyzed taxa contributors", "Number of contributor species"), 
+                                      "Number of metabolites with analyzed taxa contributors", "Number of contributing taxa"), 
                              Value = c(sample_size, species_orig, species_mapped, mets_orig, num_mets_network, mets_pred, mets_mod, mets_signif, 
                                        mets_contrib, taxa_contrib))
   return(summary_table)
@@ -418,6 +418,13 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
                                                 merge_low_abund = species_merge, add_residual = T) #Default 5*M orderings
   }
   if(!is.null(var_share_results)) var_share_results[,Species:=as.character(Species)]
+  #Consistnet column names
+  if(!is.null(var_share_results)){
+    var_share_results = merge(var_share_results, model_results[[1]], by="compound", all.x = T)
+    if("Var" %in% names(var_share_results)) setnames(var_share_results, "Var", "VarDisp")
+    if("NullDisp" %in% names(var_share_results)) setnames(var_share_results, "NullDisp", "VarDisp")
+    var_share_results = var_share_results[,list(compound, Species, VarShare, Rsq, VarDisp, PVal, Slope, Intercept)]
+  }
   return(var_share_results)
 }
 
@@ -656,7 +663,7 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
     return(NULL)
   }
   #Option to merge low abundance species
-  if(length(merge_low_abund) > 1){ #Merge low abundance species into "Other"
+  if(length(merge_low_abund) > 1){ #Merge low abundance species into "Rare/Low-abundance"
     cat(paste0("Merging ", length(merge_low_abund), " taxa for contributor analysis\n"))
     species_cmps[,NewSpecies:=ifelse(Species %in% merge_low_abund, "Rare/Low-abundance", Species)]
     species_cmps = species_cmps[,sum(CMP), by=list(compound, NewSpecies, Sample)]
@@ -910,7 +917,7 @@ cmp_met_plot = function(cmp_table, met_table, mod_results = NULL, sample_col = "
   
   met_plot = ggplot(m_compare_mets, aes(x=CMP, y = Met)) + theme_cowplot() + 
     theme(axis.text = element_text(size = 4), axis.title = element_text(size = 9), plot.title = element_text(face = "plain", size = 11))  + 
-    ggtitle(met_title)
+    ggtitle(met_title) + ylab("Metabolite")
   if(is.null(mod_results)){
     met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2)
   } else {
@@ -994,6 +1001,8 @@ read_mimosa2_files = function(file_list, configTable, app = T){
         if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
            species = humann2_format_contributions(species, file_read = T)
         }
+        #Fill in samples missing for some gene-species combos
+        species = melt(dcast(species, OTU+Gene~Sample, value.var = "CountContributedByOTU", fill = 0), id.var = c("OTU", "Gene"), variable.name = "Sample", value.name = "CountContributedByOTU")
       } else { #Unstratified
         if(!"KO" %in% names(species)){
           if("function" %in% names(species)){
@@ -1345,37 +1354,96 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
 #' @param kos_only Whether to call non-species-specific version of this function instead
 #' @param remove_rev Whether to remove reversible reactions before calculating anything
 #' @param met_subset Subset of metabolites to keep
+#' @param contrib_sizes Contribution values to order by, if applicable
 #'
 #' @return table of stats on relevant nonzero species and reactions in the network for each compound
 #' @export
 #'
 #' @examples
 #' get_cmp_summary(species, network)
-get_cmp_summary = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, kos_only = F, remove_rev = T, met_subset = NULL){
+get_cmp_summary = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, kos_only = F, remove_rev = T, met_subset = NULL, contrib_sizes = NULL){
   spec_rxn_cmps = get_species_cmp_scores(species_table, network, normalize = normalize, relAbund = relAbund, manual_agora = manual_agora, humann2 = humann2, leave_rxns = T, kos_only = kos_only, remove_rev = remove_rev)
-  if(!kos_only) spec_rxn_cmps[,SpecRxn:=paste0(Species, "_", KO)]
+  if(!kos_only) spec_rxn_cmps[,SpecRxn:=paste0(Species, "/", KO)]
   if(!is.null(met_subset)){
     spec_rxn_cmps = spec_rxn_cmps[compound %in% met_subset]
   }
+  if(!is.null(contrib_sizes)){
+    spec_rxn_cmps = merge(spec_rxn_cmps, contrib_sizes[,list(compound, Species, VarShare)], by = c("compound", "Species"), all = T)
+  } else {
+    spec_rxn_cmps[,VarShare:=NA] #use same ordering code either way
+  }
   if(!kos_only){
-    spec_rxn_summary = spec_rxn_cmps[,list(length(unique(KO[CMP > 0])), length(unique(Species[CMP > 0])), length(unique(SpecRxn[CMP > 0])), 
+    spec_rxn_summary = spec_rxn_cmps[Species != "Residual" & !is.na(SpecRxn)][order(VarShare, decreasing = T),list(length(unique(KO[CMP > 0])), length(unique(Species[CMP > 0])), length(unique(SpecRxn[CMP > 0])), 
                                            length(unique(KO[CMP < 0])), length(unique(Species[CMP < 0])), length(unique(SpecRxn[CMP < 0])), 
                                            paste0(unique(KO[CMP > 0]), collapse = " "), paste0(unique(Species[CMP > 0]), collapse = " "), 
-                                           paste0(unique(KO[CMP < 0]), collapse = " "), paste0(unique(Species[CMP < 0]), collapse = " ")), by = compound]
-    setnames(spec_rxn_summary, c("compound", "NumSynthGenes", "NumSynthSpecies", "NumSynthSpecGenes", "NumDegGenes", "NumDegSpecies", "NumDegSpecGenes", "SynthGenes", "SynthSpec", "DegGenes", "DegSpec"))
-    return(spec_rxn_summary)
+                                           paste0(unique(KO[CMP < 0]), collapse = " "), paste0(unique(Species[CMP < 0]), collapse = " "),
+                                           paste0(unique(SpecRxn[CMP > 0]), collapse = " "),
+                                           paste0(unique(SpecRxn[CMP < 0]), collapse = " ")
+                                           ), by = compound]
+    setnames(spec_rxn_summary, c("compound", "NumSynthGenes", "NumSynthSpecies", "NumSynthSpecGenes", "NumDegGenes", "NumDegSpecies", "NumDegSpecGenes", "SynthGenes", "SynthSpec", "DegGenes", "DegSpec", "SynthSpecGenes", "DegSpecGenes"))
+    spec_rxn_summary[,TopSynthSpecGenes:=sapply(1:nrow(spec_rxn_summary), function(x){
+      if(spec_rxn_summary[x,NumSynthSpecGenes==0]){
+        return("")
+      } else {
+        foo = unlist(strsplit(spec_rxn_summary[x,as.character(SynthSpecGenes)], split = " "))
+        if(spec_rxn_summary[x,NumSynthSpecGenes] > 5){
+          return(paste0(foo[1:5], collapse = " "))
+        } else {
+          return(paste0(foo[1:spec_rxn_summary[x,NumSynthSpecGenes]], collapse = " "))
+        }
+      }
+      })]
+    spec_rxn_summary[,TopDegSpecGenes:=sapply(1:nrow(spec_rxn_summary), function(x){
+      if(spec_rxn_summary[x,NumDegSpecGenes==0]){
+        return("")
+      } else {
+        foo = unlist(strsplit(spec_rxn_summary[x,DegSpecGenes], split = " "))
+        if(spec_rxn_summary[x,NumDegSpecGenes] > 5){
+          return(paste0(foo[1:5], collapse = " "))
+        } else {
+          return(paste0(foo[1:spec_rxn_summary[x,NumDegSpecGenes]], collapse = " "))
+        }
+      }
+    })]
   } else{
-    spec_rxn_summary = spec_rxn_cmps[,list(length(unique(KO[CMP > 0])),  
+    spec_rxn_summary = spec_rxn_cmps[Species != "Residual" & !is.na(KO),list(length(unique(KO[CMP > 0])),  
                                            length(unique(KO[CMP < 0])),  
                                            paste0(unique(KO[CMP > 0]), collapse = " "), 
                                            paste0(unique(KO[CMP < 0]), collapse = " ")), by = compound]
     setnames(spec_rxn_summary, c("compound", "NumSynthGenes", "NumDegGenes","SynthGenes",  "DegGenes"))
+    spec_rxn_summary[,TopSynthGenes:=sapply(1:nrow(spec_rxn_summary), function(x){
+      if(spec_rxn_summary[x,NumSynthGenes==0]){
+        return("")
+      } else {
+        foo = unlist(strsplit(spec_rxn_summary[x,SynthGenes], split = " "))
+        if(spec_rxn_summary[x,NumSynthGenes] > 5){
+          return(paste0(foo[1:5], collapse = " "))
+        } else {
+          return(paste0(foo[1:spec_rxn_summary[x,NumSynthGenes]], collapse = " "))
+        }
+      }
+    })]
+    spec_rxn_summary[,TopDegGenes:=sapply(1:nrow(spec_rxn_summary), function(x){
+      if(spec_rxn_summary[x,NumDegGenes==0]){
+        return("")
+      } else {
+      foo = unlist(strsplit(spec_rxn_summary[x,DegGenes], split = " "))
+      if(spec_rxn_summary[x,NumDegGenes] > 5){
+        return(paste0(foo[1:5], collapse = " "))
+      } else {
+        return(paste0(foo[1:spec_rxn_summary[x,NumDegGenes]], collapse = " "))
+      }
+      }
+    })]
+    spec_rxn_summary[,TopSynthSpecGenes:=TopSynthGenes]
+    spec_rxn_summary[,TopDegSpecGenes:=TopDegGenes]
     ##Add other columns as NA
-    for(colname in c("NumSynthSpecies", "NumSynthSpecGenes",  "NumDegSpecies", "NumDegSpecGenes", "SynthSpec", "DegSpec")){
-      spec_rxn_summary[,eval(colname):=NA]
+    for(colname in c("NumSynthSpecies", "NumSynthSpecGenes",  "NumDegSpecies", "NumDegSpecGenes", "SynthSpec", "DegSpec", "SynthSpecGenes", "DegSpecGenes")){
+      spec_rxn_summary[,eval(colname):=""]
     }
-    return(spec_rxn_summary)
-  } 
+  }
+  return(spec_rxn_summary)
+  
 }
 
 #' Updated version of getting all sample-level CMP scores from a KO abundance table
@@ -1700,7 +1768,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
     indiv_cmps = cmp_mods[[4]]
     #Will have to report nice summary of rxns removed, rxns direction switched, etc
   } else {
-    indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param)
+    indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param)
     if(score_transform != ""){
       indiv_cmps = transform_cmps(indiv_cmps, score_transform)
     }
@@ -1708,9 +1776,8 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
     cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
   }
   #indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
-  if(!compare_only){ #Option to skip contributions
-    var_shares = calculate_var_shares(indiv_cmps, model_results = cmp_mods, config_table = config_table)
-    var_shares = merge(var_shares, cmp_mods[[1]], by = "compound", all.x = T)
+  if(!compare_only & !no_spec_param){ #Option to skip contributions
+    var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table)
   } else {
     var_shares = NULL
   }
@@ -1722,7 +1789,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
     indiv_cmps2 = get_cmp_scores_kos(species, metagenome_network)
     cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt, rank_based = rank_based, rank_type = rank_type)
     #indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
-    var_shares_metagenome = calculate_var_shares(indiv_cmps2, model_results = cmp_mods, config_table = config_table)
+    var_shares_metagenome = calculate_var_shares(indiv_cmps2, met_table = mets_melt, model_results = cmp_mods, config_table = config_table)
     var_shares_metagenome = merge(var_shares_metagenome, cmp_mods2[[1]], by = "compound", all.x = T)
     return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
   } else {
@@ -1834,6 +1901,9 @@ map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCB
     # results = readDNAStringSet(paste0(repSeqDir, file_prefix, "vsearch_results.fna"))
     # seq_matches = data.table(seqID = names(results)[seq(1,length(results), by = 2)], databaseID = names(results)[seq(2,length(results), by = 2)])
     # seq_matches[,OrigSeq:=as.vector(results)[seq(1,length(results), by = 2)]]
+    if(!file.exists(paste0(repSeqDir, file_prefix, "vsearch_results.txt"))){
+      stop("Error: Vsearch failed to align sequences to reference DB. Is your input file formatted correctly?")
+    }
     results = fread(paste0(repSeqDir, file_prefix, "vsearch_results.txt"), header = F)
     setnames(results, paste0("V", 1:6), c("seqID", "dbID", "matchPerc", "alnlen", "mism", "gapopens"))
     if(add_embl_names){

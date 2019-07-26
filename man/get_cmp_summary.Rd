@@ -6,7 +6,7 @@
 \usage{
 get_cmp_summary(species_table, network, normalize = T, relAbund = T,
   manual_agora = F, humann2 = F, kos_only = F, remove_rev = T,
-  met_subset = NULL)
+  met_subset = NULL, contrib_sizes = NULL)
 }
 \arguments{
 \item{species_table}{OTU abundance table (wide format)}
@@ -26,6 +26,8 @@ get_cmp_summary(species_table, network, normalize = T, relAbund = T,
 \item{remove_rev}{Whether to remove reversible reactions before calculating anything}
 
 \item{met_subset}{Subset of metabolites to keep}
+
+\item{contrib_sizes}{Contribution values to order by, if applicable}
 }
 \value{
 table of stats on relevant nonzero species and reactions in the network for each compound

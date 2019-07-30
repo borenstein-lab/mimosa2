@@ -270,6 +270,7 @@ generate_contribution_table_using_picrust = function(otu_table, picrust_norm_fil
   return(contribution_table)
 }
 
+
 #' Imports pre-generated KEGG network models for each species
 #'
 #' @import data.table
@@ -314,3 +315,117 @@ get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_
   return(seq_dat)
 }
 
+
+
+#' Generate preprocessed reference databases for MIMOSA2
+#'
+#' @param database One of "KEGG", "PICRUSt_KEGG", "AGORA", or "embl_gems"
+#' @param model_table_file Optionally, a table listing models from a version of AGORA or embl_gems other than what is included in package data
+#' @param picrust_ko_path Path to unzipped precalculated PICRUSt 1 files
+#' @param kegg_paths Vector of file paths to the 3 KEGG files required for MIMOSA network template construction (1) reaction_mapformula.lst, 2) reaction_ko.list, and 3) reaction)
+#' @param dat_path For the AGORA or embl_gems options, path to directory of .mat model files
+#' @param out_path Path to write processed reaction network outputs for each taxon
+#'
+#' @return No return, writes processed reaction network to file
+#' @export
+#'
+#' @examples
+#' generate_preprocessed_networks("AGORA", dat_path = "data/AGORA/", )
+generate_preprocessed_networks = function(database, model_table_file = NULL, picrust_ko_path = "data/picrustGenomeData/", 
+                                                  kegg_paths = c("data/KEGGfiles/reaction_mapformula.lst", "data/KEGGfiles/reaction_ko.list", "data/KEGGfiles/reaction"),
+                                                  dat_path = paste0("data/", database, "/"), out_path = paste0("data/", database, "/processedModels/")
+                                                  ){
+  if(grepl("KEGG", database)){ #anything kegg related
+    #Get KEGG network template (same as MIMOSA1)
+    if(length(list.files(path = out_path, pattern = "network_template.txt")) > 0){
+      network_template = fread(paste0(out_path, "/network_template.txt"))
+    } else {
+      all_kegg = get_kegg_reaction_info(kegg_paths[2], reaction_info_file = kegg_paths[3], save_out = F)
+      network_template = generate_network_template_kegg(kegg_paths[1], all_kegg = all_kegg, write_out = F) 
+    }
+    if(database == "PICRUSt_KEGG"){
+      ## Get list of all OTUs
+      picrust_ko_table_directory = "data/picrustGenomeData/indivGenomes/"
+      picrust_ko_table_suffix = "_genomic_content.tab"
+      all_otus = gsub(picrust_ko_table_suffix, "", list.files(picrust_ko_table_directory))
+      
+      picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab"
+      #Get normalization data
+      picrust_normalization_table = fread(picrust_norm_file, header = T)#fread(paste("gunzip -c ", picrust_norm_file, sep=""), header=T)
+      colnames(picrust_normalization_table) = c("OTU", "norm_factor")
+      picrust_normalization_table[,OTU:= as.character(OTU)]
+    
+      for(x in all_otus){
+        genomic_content = get_genomic_content_from_picrust_table(x, picrust_ko_table_directory, picrust_ko_table_suffix)
+        spec_mod = generate_genomic_network(genomic_content[,unique(Gene)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F) #Not going to filter anymore
+        #Also get copy number info
+        spec_mod = merge(spec_mod, genomic_content, by.x = "KO", by.y = "Gene", all.x=T)
+        spec_mod = merge(spec_mod, picrust_normalization_table, by = "OTU", all.x=T, all.y=F)
+        spec_mod[,normalized_copy_number:=copy_number/norm_factor]
+        spec_mod = spec_mod[,list(OTU, KO, Reac, Prod, stoichReac, stoichProd, normalized_copy_number)]
+        write.table(spec_mod, file = paste0(out_path, x, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
+      }
+    } else {
+      write.table(network_template, file = paste0(out_path, "network_template.txt"), quote = F, row.names = F, sep = "\t")
+    }
+  }else if(grepl("embl", database)){ #Embl gems
+    genome_info = get_text("embl_gems_model_data")
+    if(is.null(genome_info)){ stop("List of models is required") }
+    otu_list = list.files(path = dat_path, pattern = ".mat$")
+    otu_list = gsub(".mat$", "", otu_list)
+    bad_genomes = genome_info[duplicated(ModelID), ModelID] #One double genome
+    genome_info = genome_info[!(ModelID %in% bad_genomes & CopyNum16S==0)]
+    for(spec in otu_list){
+      mod1 = load_agora_models(spec, agora_path = dat_path)
+      mod1 = get_S_mats(mod1, spec, edge_list = T)
+      ##Read back in and add copy number info????
+      print(spec)
+      mod1[,copy_number:=1]
+      mod1[,Reac:=gsub("[C_c]", "[c]", Reac, fixed = T)]
+      mod1[,Prod:=gsub("[C_c]", "[c]", Prod, fixed = T)]
+      mod1[,Reac:=gsub("[C_e]", "[e]", Reac, fixed = T)]
+      mod1[,Prod:=gsub("[C_e]", "[e]", Prod, fixed = T)]
+      
+      mod1 = merge(mod1, genome_info[,list(ModelID, CopyNum16S)], all.x = T, by.x = "Species", by.y = "ModelID")
+      mod1[,normalized_copy_number:=ifelse(CopyNum16S==0|is.na(CopyNum16S), 1, copy_number/CopyNum16S)]
+      mod1 = mod1[,list(Species, KO, Reac, Prod, stoichReac, stoichProd, normalized_copy_number, LB, UB, Rev)]
+      write.table(mod1, file = paste0(out_path, spec, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
+    }
+    
+  } else { #AGORA - type
+    genome_info = get_text("agora_model_data")
+    if(is.null(genome_info)){ stop("List of models is required")}
+    otu_list = list.files(path = dat_path, pattern = ".mat$")
+    otu_list = gsub(".mat$", "", otu_list)
+    print(otu_list)
+    genome_info = fread("data/blastDB/AGORA_full_genome_info.txt")
+    for(spec in otu_list){
+      ##Read back in and add copy number info
+      print(spec)
+      mod1 = load_agora_models(spec, agora_path = dat_path)
+      mod1 = get_S_mats(mod1, spec, edge_list = T)
+      mod1[,copy_number:=1]
+      mod1 = merge(mod1, genome_info[,list(ModelAGORA, CopyNum)], all.x = T, by.x = "Species", by.y = "ModelAGORA")
+      mod1[,normalized_copy_number:=ifelse(CopyNum==0|is.na(CopyNum), 1, copy_number/CopyNum)]
+      mod1 = mod1[,list(Species, KO, Reac, Prod, stoichReac, stoichProd, normalized_copy_number, LB, UB, Rev)]
+      write.table(mod1, file = paste0(dat_path, spec, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
+    }
+  }
+}
+
+#' Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables
+#'
+#' @import biomartr
+#' @param db Either AGORA or embl_gems
+#' @param picrust_norm_file File path to PICRUSt 16S normalization reference data
+#' @param picrust_ko_table_directory Directory of PICRUSt genome OTU predictions
+#' @param picrust_ko_table_suffix File naming of PICRUSt genome OTU predictions
+#' @param copynum_column Whether to include a copy number column in the contribution table
+#' @param otu_rel_abund Whether to convert OTU table to relative abundances first
+#' @return Table of PICRUSt-based contribution abundances for all OTUs
+#' @examples
+#' generate_contribution_table_using_picrust(otu_table, picrust_norm_file, picrust_dir, picrust_suffix)
+#' @export
+download_ribosomal_ref_seqs = function(db = "AGORA", out_path){
+  
+}

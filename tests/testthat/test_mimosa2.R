@@ -18,8 +18,8 @@ test_config_file2 = "../../../MIMOSA2shiny/data/exampleData/configs_example_clea
 test_results_normal = function(config_table, file_prefix){
   expect_silent(check_config_table(config_table))
   config_table = check_config_table(config_table)
-  file_list = as.list(config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V2])
-  names(file_list) = config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V1]
+  file_list = as.list(config_table[grepl("file", V1, ignore.case = T), V2])
+  names(file_list) = config_table[grepl("file", V1, ignore.case = T), V1]
   data_inputs = read_mimosa2_files(file_list, config_table, app = F)
   expect_silent(read_mimosa2_files(file_list, config_table, app = F))
   expect_error(read_mimosa2_files(file_list, config_table, app = T))
@@ -27,11 +27,11 @@ test_results_normal = function(config_table, file_prefix){
   mets = data_inputs$mets
   expect_gt(nrow(species), 0)
   expect_gt(nrow(mets), 0)
-  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_true("OTU" %in% names(species))
+  if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]) expect_true("OTU" %in% names(species))
   expect_true("compound" %in% names(mets))
   if(config_table[V1=="metType", V2!=get_text("met_type_choices")[2]]) expect_equal(get_compound_format(mets[,compound]), "KEGG")
-  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_equal(nrow(species[is.na(OTU)]), 0) else {
-    if(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]]){
+  if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]) expect_equal(nrow(species[is.na(OTU)]), 0) else {
+    if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
       expect_equal(nrow(species[is.na(KO)]), 0)
     } else {
       expect_equal(nrow(species[is.na(Gene)]), 0)
@@ -51,13 +51,16 @@ test_results_normal = function(config_table, file_prefix){
     print(head(network))
     expect_true(all(c("KO", "Reac", "Prod", "stoichReac", "stoichProd") %in% names(network)))
   }
+  if(config_table[V1=="database", V2 == get_text("database_choices")[5]]) {
+    expect_true(all(c("Gene", "OTU", "CountContributedByOTU") %in% names(species)))
+  }
   if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_setequal(network[,unique(as.character(OTU))], species[,as.character(OTU)])
   expect_known_output(network, file = paste0(file_prefix, "_net.rda"))
-  if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
-    metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table, netAdd = data_inputs$netAdd)
-    expect_equal(metagenome_network[,unique(OTU)], "TotalMetagenome")
-    expect_true(all(c("KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(metagenome_network)))
-  }
+  # if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
+  #   metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table, netAdd = data_inputs$netAdd)
+  #   expect_equal(metagenome_network[,unique(OTU)], "TotalMetagenome")
+  #   expect_true(all(c("KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(metagenome_network)))
+  # }
   
   if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
     expect_warning(map_to_kegg(mets))
@@ -77,10 +80,10 @@ test_results_normal = function(config_table, file_prefix){
     }
     cat(paste0("Regression type is ", rank_type, "\n"))
   } else rank_based = F
-  if(config_table[V1=="database", V2==get_text("database_choices")[4]] & identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[1])){
+  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     no_spec_param = T
     humann2_param = F
-  } else if(config_table[V1=="database", V2==get_text("database_choices")[4]] & identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[2])){
+  } else if(config_table[V1=="database", V2==get_text("database_choices")[5]] ){
     no_spec_param = F
     humann2_param = T
   } else {
@@ -341,8 +344,8 @@ test_that("Metagenome option works", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="database", V2:=get_text("database_choices")[4]]
   config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
-  config1 = config1[V1 != "file1"]
-  config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_metagenome.txt", get_text("metagenome_options")[1])))
+  config1[V1 == "file1", V2:="test_metagenome.txt"]
+  #config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_metagenome.txt", get_text("metagenome_options")[1])))
   config1[V1=="file2", V2:="test_metagenome_mets.txt"]
   config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_metagenome")
@@ -353,10 +356,9 @@ test_that("Metagenome option works", {
 
 test_that("Metagenome stratified option works", {
   config1 = fread(test_config_file1, header = F, fill = T)
-  config1[V1=="database", V2:=get_text("database_choices")[4]]
+  config1[V1=="database", V2:=get_text("database_choices")[5]]
   config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
-  config1 = config1[V1 != "file1"]
-  config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_contributions.txt", get_text("metagenome_options")[2])))
+  config1[V1 == "file1", V2:="test_contributions.txt"]
   config1[V1=="file2", V2:="test_mets.txt"]
   config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_metagenome_stratified")

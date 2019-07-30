@@ -89,7 +89,7 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "mb
 #' get_analysis_summary(input_species, species, mets, network, cmps, mod_results, contributions, config_table)
 get_analysis_summary = function(input_species, species, mets, network, indiv_cmps, cmp_mods, var_shares, config_table, pval_threshold = 0.1){
   #Sample size
-  if(identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[2])){
+  if(identical(config_table[V1=="database", V2], get_text("database_choices")[5])){
     sample_size = length(intersect(species[,unique(Sample)], names(mets)))
   } else {
     sample_size = length(intersect(names(species), names(mets)))
@@ -124,9 +124,9 @@ get_analysis_summary = function(input_species, species, mets, network, indiv_cmp
     mets_contrib = 0
     taxa_contrib = 0
   }
-  summary_table = data.table(Stat = c("Sample size with complete data", "Original number of taxa", "Number of mapped taxa", 
+  summary_table = data.table(Stat = c("Sample size with complete data", "Original number of taxa/KOs", "Number of mapped taxa/KOs", 
                                       "Original number of metabolites", "Number of metabolites in network model", "Number of metabolites with CMP scores", 
-                                      "Number of metabolites with nonzero model fits", paste0("Number of significant (p <", pval_threshold, ") metabolites"), 
+                                      "Number of metabolites with successful model fits", paste0("Number of significant (p <", pval_threshold, ") metabolites"), 
                                       "Number of metabolites with analyzed taxa contributors", "Number of contributing taxa"), 
                              Value = c(sample_size, species_orig, species_mapped, mets_orig, num_mets_network, mets_pred, mets_mod, mets_signif, 
                                        mets_contrib, taxa_contrib))
@@ -967,7 +967,7 @@ plot_all_cmp_mets = function(cmp_table, met_table, mod_results){
 #' read_mimosa2_files(input_file_list, config_table)
 #' @export
 read_mimosa2_files = function(file_list, configTable, app = T){
-  if(configTable[V1=="database", V2 != get_text("database_choices")[4]]){ #Not metagenome-only
+  if(configTable[V1=="database", !V2 %in% get_text("database_choices")[4:5]]){ #Not metagenome-only
     if(app){
       if(!is.null(file_list[["file1"]]$datapath)){
         species = fread(file_list[["file1"]]$datapath, header = T)
@@ -990,14 +990,13 @@ read_mimosa2_files = function(file_list, configTable, app = T){
       species = filter_species_abunds(species, filter_type = "mean")
     }
   } else {
-    #Read metagenome file and hold it as species if we are using it for that
+    #Read metagenome file and hold it as species 
     if(app){
-      species = fread(file_list[["metagenome"]]$datapath, header = T)
+      species = fread(file_list[["file1"]]$datapath, header = T)
     } else {
-      species = fread(file_list[["metagenome"]], header = T)
+      species = fread(file_list[["file1"]], header = T)
     }
-    if(configTable[V1=="metagenome_format", V2] %in% get_text("metagenome_options")){ #If we have metagenome data
-      if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]]){ #stratified
+    if(configTable[V1=="database", V2==get_text("database_choices")[5]]){ #stratified
         if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
            species = humann2_format_contributions(species, file_read = T)
         }
@@ -1013,13 +1012,8 @@ read_mimosa2_files = function(file_list, configTable, app = T){
         }
       }
     }
-  }
   #Save option to use for everything else
-  if("metagenome_format" %in% configTable[,V1]){
-    humann2_metagenome = ifelse(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]] & configTable[V1=="database", V2==get_text("database_choices")[4]], T, F)
-  } else {
-    humann2_metagenome = F
-  }
+  humann2_metagenome = ifelse(configTable[V1=="database", V2==get_text("database_choices")[5]], T, F)
   #Read metabolites
   if(app) mets = fread(file_list[["file2"]]$datapath, header = T) else mets = fread(file_list[["file2"]], header = T)
   met_nonzero_filt = ifelse(configTable[V1=="metNzeroFilter", is.numeric(V2)], configTable[V1=="metNzeroFilter", V2], 5)
@@ -1035,8 +1029,8 @@ read_mimosa2_files = function(file_list, configTable, app = T){
   mets = mets[,c("compound", shared_samps), with=F]
   dat_list = list(species, mets)
   names(dat_list) = c("species", "mets")
-  for(extraFile in c("metagenome","netAddFile")){
-    if(!(extraFile=="metagenome" & configTable[V1=="database", V2==get_text("database_choices")[4]])){ #SKip metagenome if already read in
+  for(extraFile in c("netAddFile")){
+    #if(!(extraFile=="metagenome" & configTable[V1=="database", V2==get_text("database_choices")[4]])){ #SKip metagenome if already read in
       if(extraFile %in% names(file_list)){
         if(!is.null(file_list[[extraFile]])){
           if(file_list[[extraFile]] != F){
@@ -1045,26 +1039,27 @@ read_mimosa2_files = function(file_list, configTable, app = T){
             names(dat_list[[length(dat_list)]]) = extraFile
           }
         }
-      }
-    } else {
-      #save species as metagenome also if that's what's happening
-      dat_list[[extraFile]] = species
-    }
+     # }
+    } 
+    # else {
+    #   #save species as metagenome also if that's what's happening
+    #   dat_list[[extraFile]] = species
+    # }
   }
-  if("metagenome_format" %in% configTable[,V1]){ # TO do either check col name or ignore this option
-    if(configTable[V1=="metagenome_format", V2==get_text("metagenome_options")[2]] & configTable[V1=="database", V2 != get_text("database_choices")[4]] & "metagenome" %in% names(dat_list)){
-      if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
-        dat_list$metagenome = humann2_format_contributions(dat_list$metagenome, file_read = T)
-      }
-    }
-  }
-  if("metagenome" %in% names(dat_list) & configTable[V1=="database", V2 != get_text("database_choices")[4]]){ #extra metagenome
-    metagenome_samps = ifelse(configTable[V1=="metagenome_format", V1==get_text("metagenome_options")[2]], dat_list$metagenome[,unique(Sample)], names(dat_list$metagenome))
-    if(sum(shared_samps %in% metagenome_samps) < 3){
-      warning("Metagenome sample IDs not compatible with species and metabolites, will be ignored")
-      dat_list$metagenome = NULL
-    }
-  }
+  # if(configTable[V1=="database", V2 %in% get_text("database_choices")[4:5]]){ # TO do either check col name or ignore this option
+  #   if(configTable[V1=="database", V2==get_text("database_choices")[5]]){
+  #     if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
+  #       dat_list$metagenome = humann2_format_contributions(dat_list$metagenome, file_read = T)
+  #     }
+  #   }
+  # }
+  # if("metagenome" %in% names(dat_list) & configTable[V1=="database", V2 != get_text("database_choices")[4]]){ #extra metagenome
+  #   metagenome_samps = ifelse(configTable[V1=="metagenome_format", V1==get_text("metagenome_options")[2]], dat_list$metagenome[,unique(Sample)], names(dat_list$metagenome))
+  #   if(sum(shared_samps %in% metagenome_samps) < 3){
+  #     warning("Metagenome sample IDs not compatible with species and metabolites, will be ignored")
+  #     dat_list$metagenome = NULL
+  #   }
+  # }
   return(dat_list)
 }
 
@@ -1163,15 +1158,15 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
     # }
     ### Now build network from mod_list
     if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
-      if(config_table[V1=="database", !V2 %in% get_text("database_choices")[c(1, 2, 4)]]){
-        stop("Only Greengenes currently implemented")
+      if(config_table[V1=="database", !V2 %in% get_text("database_choices")[c(1, 2, 4, 5)]]){
+        stop("SILVA to KEGG not currently implemented")
       }
-      if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+      if(config_table[V1=="database", V2 %in% get_text("database_choices")[4:5]]){
         if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
           stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
         }
         #Get network from metagenome KOs
-        if(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]]){
+        if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
           species = species[rowSums(species[,names(species) != "KO", with=F]) != 0]
           network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
           network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
@@ -1196,7 +1191,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
     } else if (config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ #embl_gems
       network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "embl_gems/processed/"))
     }else stop('Invalid model format specified')
-    if(!(config_table[V1=="database", V2==get_text("database_choices")[4]] & identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[1]))){
+    if(!(config_table[V1=="database", V2==get_text("database_choices")[4]])){
       #Anything other than generic KOs
       species = species[OTU %in% network[,OTU]]
     }
@@ -1491,10 +1486,10 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, re
   if(!leave_rxns){
     spec_cmps = spec_cmps[,list(sum(CMP), length(unique(KO[CMP > 0])), length(unique(KO[CMP < 0]))), by=list(Sample, compound)]
     setnames(spec_cmps, c("V1", "V2", "V3"), c("CMP", "NumSynthGenes", "NumDegGenes"))
-    spec_cmps[,NumSynthSpecies:=NA]
-    spec_cmps[,NumDegSpecies:=NA]
-    spec_cmps[,NumSynthSpecGenes:=NA]
-    spec_cmps[,NumDegSpecGenes:=NA]
+    spec_cmps[,NumSynthSpecies:=""]
+    spec_cmps[,NumDegSpecies:=""]
+    spec_cmps[,NumSynthSpecGenes:=""]
+    spec_cmps[,NumDegSpecGenes:=""]
   }
   #all_comps = spec_cmps[,unique(compound)]
   # if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2){ #If compounds are not KEGG IDs - this will not happen with KOs
@@ -1644,21 +1639,21 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     req_params = c("database", "genomeChoices")
   } else {
     req_params = c("file1", "file2", "database", "genomeChoices")
-    if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
-      req_params[req_params=="file1"] = "metagenome"
-    }
+    # if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+    #   req_params[req_params=="file1"] = "metagenome"
+    # }
   }
   if(any(!req_params %in% config_table[,V1])){
     missing_param = req_params[!req_params %in% config_table[,V1]]
     stop(paste0("Required parameters missing from configuration file: ", missing_param, "\n"))
   } 
-  all_params = c(req_params, "metagenome", "metagenome_format", "contribType", "metType", "netAdd", "simThreshold", "kegg_prefix", "data_prefix", "vsearch_path", "compare_only") #Move to package sysdata?
+  all_params = c(req_params, "contribType", "metType", "netAdd", "simThreshold", "kegg_prefix", "data_prefix", "vsearch_path", "compare_only") #Move to package sysdata?  "metagenome", "metagenome_format",
   config_table[V2=="", V2:=FALSE]
   if(length(all_params[!all_params %in% config_table[,V1]]) > 0){
     config_table = rbind(config_table, data.table(V1 = all_params[!all_params %in% config_table[,V1]], V2 = FALSE))
   }
   #if non-species metagenome is provided, set compare_only flag
-  if(config_table[V1=="metagenome_format", V2==get_text("metagenome_options")[1]]){
+  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     config_table[V1=="compare_only", V2:="TRUE"]    
   }
   return(config_table)
@@ -1682,8 +1677,8 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
     data_inputs = list(species = species, mets = mets)
   } else {
     config_table = check_config_table(config_table, app = F)
-    file_list = as.list(config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V2])
-    names(file_list) = config_table[grepl("file", V1, ignore.case = T)|V1=="metagenome", V1]
+    file_list = as.list(config_table[grepl("file", V1, ignore.case = T), V2])
+    names(file_list) = config_table[grepl("file", V1, ignore.case = T), V1]
     data_inputs = read_mimosa2_files(file_list, config_table, app = F)
     species = data_inputs$species
     mets = data_inputs$mets
@@ -1697,15 +1692,15 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
     network = network_results[[1]]
     species = network_results[[2]]
   }
-  if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
-    #If we are doing a comparison of the species network and the metagenome network
-    #Metagenome data
-    #Implement doing stuff with this later
-    metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table, netAdd = data_inputs$netAdd)
-    # species2 = metagenome_data[[1]]
-    # metagenome_network = metagenome_data[[2]]
-    #Metagenome data
-  }
+  # if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]){
+  #   #If we are doing a comparison of the species network and the metagenome network
+  #   #Metagenome data
+  #   #Implement doing stuff with this later
+  #   metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table, netAdd = data_inputs$netAdd)
+  #   # species2 = metagenome_data[[1]]
+  #   # metagenome_network = metagenome_data[[2]]
+  #   #Metagenome data
+  # }
 
   if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
     mets = map_to_kegg(mets)
@@ -1725,10 +1720,10 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
     }
     cat(paste0("Regression type is ", rank_type, "\n"))
   } else rank_based = F
-  if(config_table[V1=="database", V2==get_text("database_choices")[4]] & identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[1])){
+  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     no_spec_param = T
     humann2_param = F
-  } else if(config_table[V1=="database", V2==get_text("database_choices")[4]] & identical(config_table[V1=="metagenome_format", V2], get_text("metagenome_options")[2])){
+  } else if(config_table[V1=="database", V2==get_text("database_choices")[5]]){
     no_spec_param = F
     humann2_param = T
   } else {
@@ -1785,16 +1780,16 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
   cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param, met_subset = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0,compound])
   cmp_mods[[1]] = merge(cmp_mods[[1]], cmp_summary, by = "compound", all.x = T)
   
-  if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){ #if we have a metagenome as well as 16s
-    indiv_cmps2 = get_cmp_scores_kos(species, metagenome_network)
-    cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt, rank_based = rank_based, rank_type = rank_type)
-    #indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
-    var_shares_metagenome = calculate_var_shares(indiv_cmps2, met_table = mets_melt, model_results = cmp_mods, config_table = config_table)
-    var_shares_metagenome = merge(var_shares_metagenome, cmp_mods2[[1]], by = "compound", all.x = T)
-    return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
-  } else {
-    return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network))
-  }
+  # if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){ #if we have a metagenome as well as 16s
+  #   indiv_cmps2 = get_cmp_scores_kos(species, metagenome_network)
+  #   cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt, rank_based = rank_based, rank_type = rank_type)
+  #   #indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
+  #   var_shares_metagenome = calculate_var_shares(indiv_cmps2, met_table = mets_melt, model_results = cmp_mods, config_table = config_table)
+  #   var_shares_metagenome = merge(var_shares_metagenome, cmp_mods2[[1]], by = "compound", all.x = T)
+  #   return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
+  # } else {
+  return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network))
+#  }
 
 }
 

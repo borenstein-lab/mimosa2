@@ -6,18 +6,21 @@
 #' @param species_cmps Table of species contribution abundances
 #' @param mets_melt Table of metabolite concentrations
 #' @param rank_based Whether to use Rfit instead of standard linear regression
-#' @param rank_type Type of robust regression to use
+#' @param rank_type Type of robust regression to use (Rfit or mblm)
+#' @param cmp_nonzero_min Filter metabolites that have fewer than this number of nonzero CMP scores
 #' @return List of 2 data.tables - one with model summary results, one with model residuals
 #' @examples
 #' fit_cmp_mods(species_cmps, met_data)
 #' @export
-fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "mblm"){
+fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "Rfit", cmp_nonzero_min = 4){
     tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
     #Fill in any missing 0s
     tot_cmps = melt(dcast(tot_cmps, compound~Sample, value.var = "V1", fill = 0), id.var = "compound", variable.name = "Sample")
     tot_cmps = merge(tot_cmps, mets_melt[,list(compound, Sample, value)], by = c("compound", "Sample"))
     setnames(tot_cmps, c("value.x", "value.y"), c("V1", "value"))
     if(nrow(tot_cmps) < 2) stop("Insufficient data")
+    bad_mets = tot_cmps[,length(V1[V1 != 0]), by=compound][V1 < cmp_nonzero_min, compound]
+    tot_cmps = tot_cmps[!compound %in% bad_mets]
     all_comps = tot_cmps[,unique(compound)]
     model_dat = data.table(compound = all_comps, Intercept = 0, Slope = 0, Rsq = 0, PVal = 0) #Make all other columns numeric
     resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
@@ -435,6 +438,7 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
     if("NullDisp" %in% names(var_share_results)) setnames(var_share_results, "NullDisp", "VarDisp")
     #Compound-level values first, then species-level contributions
     var_share_results = var_share_results[,list(compound, Rsq, VarDisp, PVal, Slope, Intercept, Species, VarShare)]
+    setnames(var_share_results, "PVal", "ModelPVal")
   }
   return(var_share_results)
 }
@@ -931,7 +935,7 @@ cmp_met_plot = function(cmp_table, met_table, mod_results = NULL, sample_col = "
   if(is.null(met_title)) met_title = m_compare_mets[,unique(compound)]
   
   met_plot = ggplot(m_compare_mets, aes(x=CMP, y = Met)) + theme_cowplot() + 
-    theme(axis.text = element_text(size = 4), axis.title = element_text(size = 9), plot.title = element_text(face = "plain", size = 11))  + 
+    theme(axis.text = element_text(size = 4), axis.title = element_text(size = 9), plot.title = element_text(face = "plain", size = 9))  + 
     ggtitle(met_title) + ylab("Metabolite")
   if(is.null(mod_results)){
     met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2)

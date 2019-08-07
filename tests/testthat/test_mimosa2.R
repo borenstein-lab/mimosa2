@@ -129,7 +129,9 @@ test_results_normal = function(config_table, file_prefix){
   expect_equal(nrow(indiv_cmps[is.na(Sample)]), 0)
   
   print(cmp_mods)
-  expect_equal(nrow(cmp_mods[[1]]), length(intersect(mets[,compound], indiv_cmps[,unique(compound)])))
+  #This one is no longer true if there are metabolites with too few nonzero CMPs
+  expect_lte(nrow(cmp_mods[[1]]), length(intersect(mets[,compound], indiv_cmps[,unique(compound)])))
+  expect_gt(nrow(cmp_mods[[1]]), 0)
   expect_equal(nrow(cmp_mods[[1]])*indiv_cmps[,length(unique(Sample))], nrow(cmp_mods[[2]]))
   expect_true(cmp_mods[[2]][,all(is.numeric(Resid))])
   expect_equal(nrow(cmp_mods[[2]][is.na(Resid)]), 0)

@@ -5,7 +5,8 @@
 \title{Wrapper function to calculate contributions to variance, specific method depends on configuration}
 \usage{
 calculate_var_shares(species_contribution_table, met_table, model_results,
-  config_table, valueVar = "newValue", species_merge = NULL)
+  config_table, valueVar = "newValue", species_merge = NULL,
+  signif_threshold = 1, add_summary = T)
 }
 \arguments{
 \item{species_contribution_table}{Table of species contributions (with residuals)}
@@ -17,6 +18,8 @@ calculate_var_shares(species_contribution_table, met_table, model_results,
 \item{config_table}{Table of analysis settings}
 
 \item{valueVar}{Column name to use for values}
+
+\item{signif_threshold}{Only analyze metabolites with a model p-value less than this value (for rank-based only)}
 }
 \value{
 Data table of variance shares by each species in the original table for each metabolite

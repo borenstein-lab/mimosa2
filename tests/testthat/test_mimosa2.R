@@ -121,7 +121,7 @@ test_results_normal = function(config_table, file_prefix){
   }
   expect_gt(nrow(indiv_cmps), 0)
   print(head(indiv_cmps))
-  expect_setequal(names(indiv_cmps), c("Species", "Sample","compound", "CMP", "NumSynthGenes", "NumSynthSpecies","NumSynthSpecGenes", "NumDegGenes","NumDegSpecies","NumDegSpecGenes"))
+  expect_setequal(names(indiv_cmps), c("Species", "Sample","compound", "CMP")) #, "NumSynthGenes", "NumSynthSpecies","NumSynthSpecGenes", "NumDegGenes","NumDegSpecies","NumDegSpecGenes"))
   #expect_setequal(indiv_cmps[,unique(Sample)], names(mets)[names(mets) != "compound"])
   expect_true(indiv_cmps[,all(is.numeric(CMP))])
   expect_equal(nrow(indiv_cmps[is.na(compound)]), 0)
@@ -134,7 +134,7 @@ test_results_normal = function(config_table, file_prefix){
   expect_true(cmp_mods[[2]][,all(is.numeric(Resid))])
   expect_equal(nrow(cmp_mods[[2]][is.na(Resid)]), 0)
   if(!compare_only & !no_spec_param){ #Option to skip contributions
-    var_shares = calculate_var_shares(indiv_cmps, model_results = cmp_mods, met_table = mets_melt, config_table = config_table)
+    var_shares = calculate_var_shares(indiv_cmps, model_results = cmp_mods, met_table = mets_melt, config_table = config_table, signif_threshold = 0.1)
     if(is.null(var_shares)){
       config_table[V1=="compare_only", V2:= TRUE]
     }
@@ -144,8 +144,8 @@ test_results_normal = function(config_table, file_prefix){
   expect_known_output(var_shares, file = paste0(file_prefix, "_var_shares.rda"))
   summary_cmps = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = agora_param, kos_only = no_spec_param, 
                                  humann2 = humann2_param, met_subset = mets[,compound], contrib_sizes = var_shares)
-  expect_gt(nrow(summary_cmps), 0)
-  cmp_mods[[1]] = merge(cmp_mods[[1]], summary_cmps, by = "compound", all.x = T)
+  expect_gt(nrow(summary_cmps$CompLevelSummary), 0)
+  cmp_mods[[1]] = merge(cmp_mods[[1]], summary_cmps$CompLevelSummary, by = "compound", all.x = T)
   
   #shinyjs::logjs(devtools::session_info())
   #Order dataset for plotting

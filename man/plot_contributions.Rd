@@ -6,7 +6,7 @@
 \usage{
 plot_contributions(varShares, metabolite, metIDcol = "metID",
   include_zeros = F, include_residual = F, merge_threshold = 0.03,
-  color_palette = NULL)
+  spec_threshold = 10, color_palette = NULL)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}
@@ -18,6 +18,8 @@ plot_contributions(varShares, metabolite, metIDcol = "metID",
 \item{include_residual}{Whether to include the residual variation}
 
 \item{merge_threshold}{Threshold at which low-contributing species are merged into "other"}
+
+\item{spec_threshold}{Threshold number of minimum contributing species for merging into "other" to be applied}
 
 \item{color_palette}{Color palette to use for taxa in plot}
 }

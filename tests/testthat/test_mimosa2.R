@@ -213,7 +213,6 @@ test_that("Seq var -> Greengenes OTUs, species-rxn KEGG mods", {
   test_results_normal(config1, file_prefix = "test_seq_gg")
   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
   test_results_normal(config1, "test_seq_agora_rank")
-  
 })
 
 test_that("GG OTUs -> network", {

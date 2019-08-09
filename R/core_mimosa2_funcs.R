@@ -689,18 +689,31 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
   
   spec_list = species_cmps[,sort(unique(as.character(Species)))]
   nspec = length(spec_list)
-  if(nperm == 0){ #Can specify either a hard number of random orderings or as a function of the number of taxa
+  if(factorial(nspec) < nperm_taxa*nspec){
+    cat("Calculating contributions across all possible subsets\n")
+    nperm = factorial(nspec)
+    all_perm = T
+  } else if(nperm == 0){ #Can specify either a hard number of random orderings or as a function of the number of taxa
     nperm = nperm_taxa*nspec
+    all_perm = F
   }
   if(nperm > nperm_max){
     cat("Recommended number of permutations exceeds maximum\n")
     nperm = nperm_max
+    all_perm = F
   }
   cat("Running ", nperm, " permutations for each metabolite\n")
   
-  R1 = sapply(1:nperm, function(x){
-    sample.int(nspec)
-  }) # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
+  if(all_perm){
+    R1 = t(gtools::permutations(nspec, nspec))
+  } else {
+    R1 = t(as.matrix(permute::shuffleSet(nspec, nperm)))
+    # R1 = sapply(1:nperm, function(x){
+    #   sample.int(nspec)
+    # }) 
+  }
+  
+  # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
   #R1 = t(make_perm_mat(nperm, nspec))
   #Calculate total null dispersion for each compound
   mod_fit_true[,NullDisp:=sapply(compound, function(x){

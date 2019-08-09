@@ -7,7 +7,7 @@
 run_mimosa2(config_table, species = "", mets = "", compare_only = F)
 }
 \arguments{
-\item{config_table}{Data.table of input files and settings for MIMOSA analysis}
+\item{config_table}{Data.table of input files and settings for MIMOSA analysis OR path to such a table}
 
 \item{species}{Optionally provide already-read-in species data}
 

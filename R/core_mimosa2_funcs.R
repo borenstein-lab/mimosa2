@@ -697,10 +697,11 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
     nperm = nperm_max
   }
   cat("Running ", nperm, " permutations for each metabolite\n")
+  
   R1 = sapply(1:nperm, function(x){
     sample.int(nspec)
   }) # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
-  
+  #R1 = t(make_perm_mat(nperm, nspec))
   #Calculate total null dispersion for each compound
   mod_fit_true[,NullDisp:=sapply(compound, function(x){
     j.disp.mean(mets_melt[compound==x, value])
@@ -1102,7 +1103,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
       seq_list = species[,OTU]
       if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
       if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]) { ## Greengenes
-        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch")) #Run vsearch to get gg OTUs
+        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "/picrustGG/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch")) #Run vsearch to get gg OTUs
         species[,seqID:=paste0("seq", 1:nrow(species))]
         samps = names(species)[!names(species) %in% c("OTU", "seqID")]
         new_species = merge(species, seq_results, by = "seqID", all.x=T)
@@ -1112,7 +1113,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         species = new_species
         mod_list = species[,OTU]
       } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
-        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "blastDB/"), repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)], add_agora_names = T, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
+        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "/AGORA/"), repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)], add_agora_names = T, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
         species[,seqID:=paste0("seq", 1:nrow(species))]
         samps = names(species)[!names(species) %in% c("OTU", "seqID")]
         new_species = merge(species, seq_results, by = "seqID", all.x=T)
@@ -1129,7 +1130,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         ### Convert species abundances to AGORA species IDs
 
       }  else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ ## embl_gems
-        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "embl_gems/"), repSeqFile = "all_16S_seqs.udb",
+        seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "/embl_gems/"), repSeqFile = "all_16S_seqs.udb",
                                  method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)],
                                  add_agora_names = F, add_embl_names = T,
                                  vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
@@ -1149,12 +1150,12 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
       } else if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ ## AGORA or embl_gems
         if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
           cat("Mapping greengenes OTUs to AGORA...\n")
-          species = otus_to_db(species, target_db = "AGORA", gg_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99"))
+          species = otus_to_db(species, target_db = "AGORA", data_prefix = paste0(config_table[V1=="data_prefix", V2], "OTU_model_mapping_files/"))
           if(nrow(species[!is.na(OTU)]) == 0) stop("No OTUs mapped to reference models - did you select the correct reference format?")
           cat(paste0("Mapped to ", nrow(species[!is.na(OTU)]), " AGORA species"))
         } else { #embl_gems - should rename this function
           cat("Mapping greengenes OTUs to RefSeq...\n")
-          species = otus_to_db(species[!is.na(OTU)], target_db = "RefSeq", gg_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/gg_13_8_99"))
+          species = otus_to_db(species[!is.na(OTU)], target_db = "RefSeq", data_prefix = paste0(config_table[V1=="data_prefix", V2], "OTU_model_mapping_files/"))
           if(nrow(species[!is.na(OTU)]) == 0) stop("No OTUs mapped to reference models - did you select the correct reference format?")
           cat(paste0("Mapped to ", nrow(species[!is.na(OTU)]), " RefSeq species"))
         }
@@ -1163,9 +1164,9 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
     } else if(config_table[V1=="database", V2==get_text("database_choices")[3]]){ # SILVA
       if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ # AGORA
         if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
-          species = otus_to_db(species, database = "SILVA", target_db = "AGORA", silva_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99"))
+          species = otus_to_db(species, database = "SILVA", target_db = "AGORA", data_prefix = paste0(config_table[V1=="data_prefix", V2], "OTU_model_mapping_files/"))
         } else { #Embl_gems
-          species = otus_to_db(species, database = "SILVA", target_db = "RefSeq", silva_file_prefix = paste0(config_table[V1=="data_prefix", V2], "rep_seqs/silva_132_99"))
+          species = otus_to_db(species, database = "SILVA", target_db = "RefSeq", data_prefix = paste0(config_table[V1=="data_prefix", V2], "OTU_model_mapping_files/"))
         }
         mod_list = species[!is.na(OTU), OTU]
         if(nrow(species[!is.na(OTU)]) == 0) stop("No OTUs mapped to reference models - did you select the correct reference format?")
@@ -1203,12 +1204,12 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
           network[,normalized_copy_number:=1]
         }
       } else { ##database_choices 1 or 3
-        network = get_kegg_network(mod_list, net_path = paste0(config_table[V1=="data_prefix", V2], "picrustGenomeData/indivModels/"))
+        network = get_kegg_network(mod_list, net_path = paste0(config_table[V1=="data_prefix", V2], "/picrustGG/RxnNetworks/"))
       }
     } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ #AGORA
-      network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "AGORA/"))
+      network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "/AGORA/RxnNetworks/"))
     } else if (config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ #embl_gems
-      network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "embl_gems/processed/"))
+      network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "/embl_gems/RxnNetworks/"))
     }else stop('Invalid model format specified')
     if(!(config_table[V1=="database", V2==get_text("database_choices")[4]])){
       #Anything other than generic KOs
@@ -1216,7 +1217,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
     }
   } else { ##Option for simulation data
     mod_list = species[,unique(OTU)]
-    network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "AGORA/"))
+    network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "AGORA/RxnNetworks/"))
   }
   if(!is.null(netAdd)){
     #if(config_table[V1=="netAdd", V2!=F]){
@@ -1580,23 +1581,23 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
       addTable[,stoichProd:=1]
     }
     if(!"normalized_copy_number" %in% table_type){
-      if("OTU" %in% table_type){
-        copyNums = fread(ifelse(target_format=="Cobra", paste0(data_path, "blastDB/agora_NCBItax_processed_nodups.txt"), paste0("gunzip -c ", data_path, "picrustGenomeData/16S_13_5_precalculated.tab.gz")))
-        if(target_format == "Cobra"){
-          copyNums = unique(copyNums[,list(AGORA_ID, CopyNum)])
-          specID = "AGORA_ID"
-        } else {
-          setnames(copyNums, c("OTU", "CopyNum"))
-          specID = "OTU"
-        }
-        print(copyNums)
-        addTable = merge(addTable, copyNums, by.x = "OTU", by.y = specID, all.x = T, all.y=F)
-        addTable[is.na(CopyNum), CopyNum:=1]
-        addTable[,normalized_copy_number:=1/CopyNum]
-        addTable[,CopyNum:=NULL]
-      } else {
+      # if("OTU" %in% table_type){
+      #   copyNums = fread(ifelse(target_format=="Cobra", paste0(data_path, "blastDB/agora_NCBItax_processed_nodups.txt"), paste0("gunzip -c ", data_path, "picrustGenomeData/16S_13_5_precalculated.tab.gz")))
+      #   if(target_format == "Cobra"){
+      #     copyNums = unique(copyNums[,list(AGORA_ID, CopyNum)])
+      #     specID = "AGORA_ID"
+      #   } else {
+      #     setnames(copyNums, c("OTU", "CopyNum"))
+      #     specID = "OTU"
+      #   }
+      #   print(copyNums)
+      #   addTable = merge(addTable, copyNums, by.x = "OTU", by.y = specID, all.x = T, all.y=F)
+      #   addTable[is.na(CopyNum), CopyNum:=1]
+      #   addTable[,normalized_copy_number:=1/CopyNum]
+      #   addTable[,CopyNum:=NULL]
+      # } else {
         addTable[,normalized_copy_number:=1]
-      }
+      #}
     }
   } else if("KO" %in% table_type){
     if(source_format != "KEGG"){
@@ -1675,7 +1676,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
   if(app){
     req_params = c("database", "genomeChoices")
   } else {
-    req_params = c("file1", "file2", "database", "genomeChoices")
+    req_params = c("file1", "file2", "database", "genomeChoices", "data_prefix")
     # if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     #   req_params[req_params=="file1"] = "metagenome"
     # }
@@ -1684,8 +1685,11 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     missing_param = req_params[!req_params %in% config_table[,V1]]
     stop(paste0("Required parameters missing from configuration file: ", missing_param, "\n"))
   } 
-  all_params = c(req_params, "contribType", "metType", "netAdd", "simThreshold", "kegg_prefix", "data_prefix", "vsearch_path", "compare_only") #Move to package sysdata?  "metagenome", "metagenome_format",
+  all_params = c(req_params, "contribType", "metType", "netAdd", "simThreshold", "kegg_prefix", "vsearch_path", "compare_only") #Move to package sysdata?  "metagenome", "metagenome_format",
   config_table[V2=="", V2:=FALSE]
+  if(!"kegg_prefix" %in% config_table[,V1]){
+    config_table = rbind(config_table, data.table(V1 = "kegg_prefix", V2 = paste0(config_table[V1=="data_prefix", V2], "/KEGGfiles/")))
+  }
   if(length(all_params[!all_params %in% config_table[,V1]]) > 0){
     config_table = rbind(config_table, data.table(V1 = all_params[!all_params %in% config_table[,V1]], V2 = FALSE))
   }
@@ -1699,7 +1703,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #' Run a MIMOSA 2 analysis
 #'
 #' @import data.table
-#' @param config_table Data.table of input files and settings for MIMOSA analysis
+#' @param config_table Data.table of input files and settings for MIMOSA analysis OR path to such a table
 #' @param species Optionally provide already-read-in species data
 #' @param mets Optionally provide already-read-in metabolite data
 #' @param compare_only Skip contribution calculation, just build and fit model
@@ -1709,6 +1713,10 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #' @export
 run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
   #process arguments
+  #Read config table if it is filename
+  if(typeof(config_table)=="character"){
+    config_table = fread(config_table, header = F)
+  }
   if(!identical(species, "") & !identical(mets, "")){
     config_table = check_config_table(config_table, app = T)
     data_inputs = list(species = species, mets = mets)
@@ -1809,8 +1817,14 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
   }
   #indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
   if(!compare_only & !no_spec_param){ #Option to skip contributions
-    var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table, signif_threshold = 1)
-  } else {
+    if(!humann2_param){
+      spec_dat = melt(species, id.var = "OTU", variable.name = "Sample")[,list(value/sum(value), OTU), by=Sample] #convert to relative abundance
+      bad_spec = spec_dat[,list(length(V1[V1 != 0])/length(V1), max(V1)), by=OTU]
+      bad_spec = bad_spec[V1 < 0.2 & V1 < 0.1, OTU] #Never higher than 10% and absent in at least 80% of samples
+      print(bad_spec)
+    } else bad_spec = NULL
+    var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table, species_merge = bad_spec)
+    } else {
     var_shares = NULL
   }
   #Rxns, taxa summary
@@ -1918,7 +1932,7 @@ transform_cmps = function(cmp_dat, score_transform){
 #' @examples
 #' map_seqvar(seqs)
 #' @export
-map_seqvar = function(seqs, repSeqDir = "data/blastDB/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", vsearch_path = "vsearch",
+map_seqvar = function(seqs, repSeqDir = "data/AGORA/", repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", vsearch_path = "vsearch",
                       file_prefix = "seqtemp", seqID = 0.99, add_agora_names = T, add_embl_names = F, otu_tab = F){
   file_prefix = paste0(file_prefix, randomString())
   seqList = DNAStringSet(seqs)

@@ -4,7 +4,7 @@
 \alias{map_seqvar}
 \title{Assign seq vars to OTUs or AGORA models using vsearch}
 \usage{
-map_seqvar(seqs, repSeqDir = "data/blastDB/",
+map_seqvar(seqs, repSeqDir = "data/AGORA/",
   repSeqFile = "agora_NCBI_16S.udb", method = "vsearch",
   vsearch_path = "vsearch", file_prefix = "seqtemp", seqID = 0.99,
   add_agora_names = T, add_embl_names = F, otu_tab = F)

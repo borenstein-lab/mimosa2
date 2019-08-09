@@ -2,7 +2,7 @@ file1	test_seqs.txt
 file2	test_mets_ASD.txt
 genomeChoices	AGORA genomes and models
 database	Sequence variants (ASVs)
-kegg_prefix	~/Documents/MIMOSA2shiny/data/KEGGfiles/
+kegg_prefix	~/Documents/MIMOSA2shiny/data/KEGGfiles/KEGG_2019/
 netAdd	test_netAdd_species_rxns_KEGG.txt
 simThreshold	0.95
 data_prefix	~/Documents/MIMOSA2shiny/data/

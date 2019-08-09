@@ -250,12 +250,12 @@ build_model_components = function(all_mods, species_names, remove_rev = T, missi
 #' otus_to_db(otu_list)
 #' @return List of AGORA species to use for model building
 #' @export
-otus_to_db = function(otus, database = "Greengenes", target_db = "AGORA", gg_file_prefix = "data/rep_seqs/gg_13_8_99", 
-                      silva_file_prefix = "data/rep_seqs/silva_132_99", agora_file_suffix ="_toAGORA_97_map.txt", refseq_file_suffix = "_toRefSeq_97_map.txt"){
+otus_to_db = function(otus, database = "Greengenes", target_db = "AGORA", data_prefix = "data/OTU_model_mapping_files/", gg_file_prefix = "gg_13_8_99", 
+                      silva_file_prefix = "silva_132_99", agora_file_suffix ="_toAGORA_97_map.txt", refseq_file_suffix = "_toRefSeq_97_map.txt"){
   if(database == "Greengenes"){
-    file_prefix = gg_file_prefix
+    file_prefix = paste0(data_prefix, gg_file_prefix)
   } else if(database == "SILVA"){
-    file_prefix = silva_file_prefix
+    file_prefix = paste0(data_prefix, silva_file_prefix)
   } else {
     stop("OTU database option not found")
   }

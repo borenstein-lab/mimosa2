@@ -5,8 +5,8 @@
 \title{Returns AGORA species that a list of Greengenes OTUs were mapped to}
 \usage{
 otus_to_db(otus, database = "Greengenes", target_db = "AGORA",
-  gg_file_prefix = "data/rep_seqs/gg_13_8_99",
-  silva_file_prefix = "data/rep_seqs/silva_132_99",
+  data_prefix = "data/OTU_model_mapping_files/",
+  gg_file_prefix = "gg_13_8_99", silva_file_prefix = "silva_132_99",
   agora_file_suffix = "_toAGORA_97_map.txt",
   refseq_file_suffix = "_toRefSeq_97_map.txt")
 }

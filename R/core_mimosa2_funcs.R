@@ -430,14 +430,17 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
     var_share_results = rank_based_rsq_contribs(species_contribution_table, met_table, config_table, cmp_mods = model_results, 
                                                 merge_low_abund = species_merge, add_residual = T, signif_threshold = signif_threshold) #Default 5*M orderings
   }
-  if(!is.null(var_share_results)) var_share_results[,Species:=as.character(Species)]
+  if(!is.null(var_share_results)){
+    var_share_results[,Species:=as.character(Species)]
+    var_share_results[Species != "Residual", PosVarShare:=ifelse(VarShare > 0, VarShare/sum(VarShare[VarShare > 0], na.rm=T),0), by=compound]
+  } 
   #Consistnet column names
   if(!is.null(var_share_results)){
     var_share_results = merge(var_share_results, model_results[[1]], by="compound", all.x = T)
     if("Var" %in% names(var_share_results)) setnames(var_share_results, "Var", "VarDisp")
     if("NullDisp" %in% names(var_share_results)) setnames(var_share_results, "NullDisp", "VarDisp")
     #Compound-level values first, then species-level contributions
-    var_share_results = var_share_results[,list(compound, Rsq, VarDisp, PVal, Slope, Intercept, Species, VarShare)]
+    var_share_results = var_share_results[,list(compound, Rsq, VarDisp, PVal, Slope, Intercept, Species, VarShare, PosVarShare)]
     setnames(var_share_results, "PVal", "ModelPVal")
   }
   return(var_share_results)
@@ -670,7 +673,15 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
   } else {
     mod_fit_true = cmp_mods[[1]][!is.na(Rsq) & PVal < signif_threshold,list(compound, RsqAdj, Tauhat)]
     setnames(mod_fit_true, "RsqAdj", "TrueRsq")
+    mod_fit_true[,DF2:=sapply(compound, function(x){
+      mets_melt[compound==x & !is.na(value), length(unique(Sample))]-2
+    })]
   }
+  #Calculate total null dispersion for each compound
+  mod_fit_true[,NullDisp:=sapply(compound, function(x){
+    j.disp.mean(mets_melt[compound==x, value])
+  })]
+  
   cat(paste0("Analyzing contributors to ", mod_fit_true[,length(unique(compound))], " metabolites with a model p-value less than ", signif_threshold, "\n"))
   species_cmps = species_cmps[compound %in% mod_fit_true[,compound]]
   if(mod_fit_true[,length(unique(compound))]==0){
@@ -688,109 +699,117 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
   species_cmps = melt(dcast(species_cmps, compound+Sample~Species, value.var = "CMP", fill = 0), id.vars = c("compound", "Sample"), variable.name = "Species", value.name = "CMP")
   
   spec_list = species_cmps[,sort(unique(as.character(Species)))]
+  print(spec_list)
   nspec = length(spec_list)
-  if(factorial(nspec) < nperm_taxa*nspec){
-    cat("Calculating contributions across all possible subsets\n")
-    nperm = factorial(nspec)
-    all_perm = T
-  } else if(nperm == 0){ #Can specify either a hard number of random orderings or as a function of the number of taxa
-    nperm = nperm_taxa*nspec
-    all_perm = F
-  }
-  if(nperm > nperm_max){
-    cat("Recommended number of permutations exceeds maximum\n")
-    nperm = nperm_max
-    all_perm = F
-  }
-  cat("Running ", nperm, " permutations for each metabolite\n")
-  
-  if(all_perm){
-    R1 = t(gtools::permutations(nspec, nspec))
-  } else {
-    R1 = t(as.matrix(permute::shuffleSet(nspec, nperm)))
-    # R1 = sapply(1:nperm, function(x){
-    #   sample.int(nspec)
-    # }) 
-  }
-  
-  # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
-  #R1 = t(make_perm_mat(nperm, nspec))
-  #Calculate total null dispersion for each compound
-  mod_fit_true[,NullDisp:=sapply(compound, function(x){
-    j.disp.mean(mets_melt[compound==x, value])
-  })]
-  mod_fit_true[,DF2:=sapply(compound, function(x){
-    mets_melt[compound==x & !is.na(value), length(unique(Sample))]-2
-  })]
-  #Get predictions from full model
-  species_cmps = merge(species_cmps, cmp_mods[[1]][,list(compound, Intercept, Slope)], by = "compound", all.x = T)
-  species_cmps[,PredVal:=CMP*Slope+Intercept]
-  species_cmps = merge(species_cmps, mets_melt, by = c("compound", "Sample"), all.x = T)
-    
-  allContribs = data.table()
-  
-  #For each random ordering, calculate marginal effect of each species
-  for(perm_id in 1:nperm){
-    cumulMetVars = copy(mod_fit_true)
-    spec_order = R1[,perm_id]
-    for(j in 1:nspec){
-      if(j < nspec){
-        perm_dat = species_cmps[!Species %in% spec_list[spec_order[1:j]]]
-        #Skip compounds where this species changes nothing - automatically 0
-        zero_comps = species_cmps[Species == spec_list[spec_order[j]], length(CMP[CMP != 0]), by=compound][V1==0, compound]
-        perm_dat = perm_dat[!compound %in% zero_comps]
-        #Fill in 0s for all species even if they don't do anything for that compound
-        #fit model under permutation
-        #Calculate new disp
-        tot_pred = perm_dat[,sum(PredVal), by=list(compound, Sample, value)]
-        new_disp = tot_pred[,j.disp.fit(V1, value), by=compound]
-        cumulMetVars = merge(cumulMetVars, new_disp, by = "compound", all.x = T)
-        if(!adj_rsq){
-          cumulMetVars[,NewRsq:=(1-V1/NullDisp)]
-        } else {
-          cumulMetVars[,NewRsq:=j.disp.rsq.adj(NullDisp, model_disp = V1, tauhat = Tauhat, df2 = DF2)]
-        }
-        #cumulMetVars[is.na(NewRsq), NewRsq:=0]
-        setnames(cumulMetVars, "NewRsq", spec_list[spec_order[j]])
-        cumulMetVars[,V1:=NULL]
-        cumulMetVars[compound %in% zero_comps, paste0("Marg_", spec_list[spec_order[j]]):=0] #If removing this species did nothing, just keep Rsq from previous species' removal
-        if(j > 1){
-          cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]])] #Same as previous
-          cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]]) - get(spec_list[spec_order[j]])]
-        } else {
-          cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=TrueRsq] #Same as orig
-          cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=TrueRsq - get(spec_list[spec_order[j]])]
-        }
-      } else { #Final iteration
-        cumulMetVars[,(spec_list[spec_order[j]]):=0] 
-        cumulMetVars[,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]])]
-      }
+  if(nspec == 1){
+    allContribs = mod_fit_true
+    allContribs[,Species:=spec_list]
+    allContribs[,VarShare:=TrueRsq]
+    if(add_residual){
+      mod_fit_true[,ResidualContrib:=1-TrueRsq]
+      resid_dat = data.table(mod_fit_true[,list(compound, TrueRsq, 1-TrueRsq)], Species = "Residual")
+      setnames(resid_dat, "V3", "VarShare")
+      allContribs = rbind(allContribs, resid_dat, fill = T)
     }
-    cumulMetVars[,OrderID:=perm_id]
-    cumulMetVars = cumulMetVars[,c("compound","TrueRsq", sort(names(cumulMetVars)[3:ncol(cumulMetVars)])), with=F]
-    allContribs = rbind(allContribs, cumulMetVars, fill = T)
-  }
-  allContribs_mean = allContribs[,lapply(.SD, mean), by=compound, .SDcols = paste0("Marg_", spec_list)]
-  setnames(allContribs_mean, gsub("Marg_", "", names(allContribs_mean)))
-  allContribs_mean = melt(allContribs_mean, variable.name = "Species", id.var = "compound")
-  allContribs_mean = merge(allContribs_mean, mod_fit_true, by = "compound", all = T)
-  allContribs_mean[,DF2:=NULL]
-
-  ## Format like variance contributions
-  print(allContribs_mean)
-  allContribs_mean[,VarShare:=value]
-  if(add_residual){
-    mod_fit_true[,ResidualContrib:=1-TrueRsq]
-    resid_dat = data.table(mod_fit_true[,list(compound, TrueRsq, 1-TrueRsq)], Species = "Residual")
-    print(resid_dat)
-    setnames(resid_dat, "V3", "VarShare")
-    allContribs_mean = rbind(allContribs_mean, resid_dat, fill = T)
-  }
-  if(return_perm){
-    return(list(PermMat = allContribs, Contribs = allContribs_mean))
+    return(allContribs)
   } else {
-    return(allContribs_mean)
-  }
+    if(factorial(nspec) < nperm_taxa*nspec){
+      cat("Calculating contributions across all possible subsets\n")
+      nperm = factorial(nspec)
+      all_perm = T
+    } else if(nperm == 0){ #Can specify either a hard number of random orderings or as a function of the number of taxa
+      nperm = nperm_taxa*nspec
+      all_perm = F
+    }
+    if(nperm > nperm_max){
+      cat("Recommended number of permutations exceeds maximum\n")
+      nperm = nperm_max
+      all_perm = F
+    }
+    cat("Running ", nperm, " permutations for each metabolite\n")
+    
+    if(all_perm){
+      R1 = t(gtools::permutations(nspec, nspec))
+    } else {
+      R1 = t(as.matrix(permute::shuffleSet(nspec, nperm)))
+      # R1 = sapply(1:nperm, function(x){
+      #   sample.int(nspec)
+      # }) 
+    }
+    
+    # Matrix of permutations #fread(perm_file, header = F)[,get(paste0("V",perm_id))]
+    #R1 = t(make_perm_mat(nperm, nspec))
+    
+    #Get predictions from full model
+    species_cmps = merge(species_cmps, cmp_mods[[1]][,list(compound, Intercept, Slope)], by = "compound", all.x = T)
+    species_cmps[,PredVal:=CMP*Slope+Intercept]
+    species_cmps = merge(species_cmps, mets_melt, by = c("compound", "Sample"), all.x = T)
+    
+    allContribs = data.table()
+    
+    #For each random ordering, calculate marginal effect of each species
+    for(perm_id in 1:nperm){
+      cumulMetVars = copy(mod_fit_true)
+      spec_order = R1[,perm_id]
+      for(j in 1:nspec){
+        if(j < nspec){
+          perm_dat = species_cmps[!Species %in% spec_list[spec_order[1:j]]]
+          #Skip compounds where this species changes nothing - automatically 0
+          zero_comps = species_cmps[Species == spec_list[spec_order[j]], length(CMP[CMP != 0]), by=compound][V1==0, compound]
+          perm_dat = perm_dat[!compound %in% zero_comps]
+          #Fill in 0s for all species even if they don't do anything for that compound
+          #fit model under permutation
+          #Calculate new disp
+          tot_pred = perm_dat[,sum(PredVal), by=list(compound, Sample, value)]
+          new_disp = tot_pred[,j.disp.fit(V1, value), by=compound]
+          cumulMetVars = merge(cumulMetVars, new_disp, by = "compound", all.x = T)
+          if(!adj_rsq){
+            cumulMetVars[,NewRsq:=(1-V1/NullDisp)]
+          } else {
+            cumulMetVars[,NewRsq:=j.disp.rsq.adj(NullDisp, model_disp = V1, tauhat = Tauhat, df2 = DF2)]
+          }
+          #cumulMetVars[is.na(NewRsq), NewRsq:=0]
+          setnames(cumulMetVars, "NewRsq", spec_list[spec_order[j]])
+          cumulMetVars[,V1:=NULL]
+          cumulMetVars[compound %in% zero_comps, paste0("Marg_", spec_list[spec_order[j]]):=0] #If removing this species did nothing, just keep Rsq from previous species' removal
+          if(j > 1){
+            cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]])] #Same as previous
+            cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]]) - get(spec_list[spec_order[j]])]
+          } else {
+            cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=TrueRsq] #Same as orig
+            cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=TrueRsq - get(spec_list[spec_order[j]])]
+          }
+        } else { #Final iteration
+          cumulMetVars[,(spec_list[spec_order[j]]):=0] 
+          cumulMetVars[,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]])]
+        }
+      }
+      cumulMetVars[,OrderID:=perm_id]
+      cumulMetVars = cumulMetVars[,c("compound","TrueRsq", sort(names(cumulMetVars)[3:ncol(cumulMetVars)])), with=F]
+      allContribs = rbind(allContribs, cumulMetVars, fill = T)
+    }
+    allContribs_mean = allContribs[,lapply(.SD, mean), by=compound, .SDcols = paste0("Marg_", spec_list)]
+    setnames(allContribs_mean, gsub("Marg_", "", names(allContribs_mean)))
+    allContribs_mean = melt(allContribs_mean, variable.name = "Species", id.var = "compound")
+    allContribs_mean = merge(allContribs_mean, mod_fit_true, by = "compound", all = T)
+    if(adj_rsq) allContribs_mean[,DF2:=NULL]
+    
+    ## Format like variance contributions
+    print(allContribs_mean)
+    allContribs_mean[,VarShare:=value]
+    if(add_residual){
+      mod_fit_true[,ResidualContrib:=1-TrueRsq]
+      resid_dat = data.table(mod_fit_true[,list(compound, TrueRsq, 1-TrueRsq)], Species = "Residual")
+      print(resid_dat)
+      setnames(resid_dat, "V3", "VarShare")
+      allContribs_mean = rbind(allContribs_mean, resid_dat, fill = T)
+    }
+    if(return_perm){
+      return(list(PermMat = allContribs, Contribs = allContribs_mean))
+    } else {
+      return(allContribs_mean)
+    }
+  } 
 }
 
 
@@ -809,11 +828,12 @@ getPalette = colorRampPalette(brewer.pal(12, "Paired"))
 #' @param merge_threshold Threshold at which low-contributing species are merged into "other"
 #' @param spec_threshold Threshold number of minimum contributing species for merging into "other" to be applied
 #' @param color_palette Color palette to use for taxa in plot
+#' @param order_spec Whether to sort species by contribution size
 #' @return plot of contributions
 #' @examples
 #' plot_contributions(varShares)
 #' @export
-plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F, include_residual = F, merge_threshold = 0.03, spec_threshold = 10, color_palette = NULL){
+plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F, include_residual = F, merge_threshold = 0.02, spec_threshold = 10, color_palette = NULL, order_spec = T){
   plot_dat = varShares[get(metIDcol)==metabolite]
   if(nrow(plot_dat)==0){
     warning(paste0("No taxonomic contribution data for ", metabolite, "\n"))
@@ -834,15 +854,17 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
   } else {
     color_pals = color_palette
   }
-  spec_order = plot_dat[!Species %in% c("Residual", "Other")][order(abs(VarShare), decreasing = T), as.character(unique(Species))]
-  if(nrow(plot_dat[as.character(Species)=="Other"]) > 0){
-    spec_order = c("Other", spec_order)
+  if(order_spec){
+    spec_order = plot_dat[!Species %in% c("Residual", "Other")][order(abs(VarShare), decreasing = T), as.character(unique(Species))]
+    if(nrow(plot_dat[as.character(Species)=="Other"]) > 0){
+      spec_order = c("Other", spec_order)
+    }
+    if(include_residual){
+      spec_order = c("Residual", "Other", spec_order)
+    }
+    print(spec_order)
+    plot_dat[,Species:=factor(Species, levels = spec_order)]
   }
-  if(include_residual){
-    spec_order = c("Residual", "Other", spec_order)
-  }
-  print(spec_order)
-  plot_dat[,Species:=factor(Species, levels = spec_order)]
   print(plot_dat)
   ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_manual(values = color_pals) + geom_abline(intercept = 0, slope = 0, linetype = 2) +
     theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=7), axis.text.y = element_blank(),
@@ -1720,11 +1742,12 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #' @param species Optionally provide already-read-in species data
 #' @param mets Optionally provide already-read-in metabolite data
 #' @param compare_only Skip contribution calculation, just build and fit model
+#' @param make_plots Whether to generate plots for each metabolite and extended output (as provided via the web server)
 #' @return Scaling model and variance contribution results
 #' @examples
 #' run_mimosa2(config_table, species, mets)
 #' @export
-run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
+run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F, make_plots = F){
   #process arguments
   #Read config table if it is filename
   if(typeof(config_table)=="character"){
@@ -1852,6 +1875,9 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F){
   #   var_shares_metagenome = merge(var_shares_metagenome, cmp_mods2[[1]], by = "compound", all.x = T)
   #   return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
   # } else {
+  if(make_plots){
+    
+  }
   return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network))
 #  }
 

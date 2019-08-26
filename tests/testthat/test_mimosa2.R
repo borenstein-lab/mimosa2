@@ -136,7 +136,7 @@ test_results_normal = function(config_table, file_prefix){
   expect_true(cmp_mods[[2]][,all(is.numeric(Resid))])
   expect_equal(nrow(cmp_mods[[2]][is.na(Resid)]), 0)
   if(!compare_only & !no_spec_param){ #Option to skip contributions
-    var_shares = calculate_var_shares(indiv_cmps, model_results = cmp_mods, met_table = mets_melt, config_table = config_table, signif_threshold = 0.1)
+    var_shares = calculate_var_shares(indiv_cmps, model_results = cmp_mods, met_table = mets_melt, config_table = config_table, signif_threshold = 0.2)
     if(is.null(var_shares)){
       config_table[V1=="compare_only", V2:= TRUE]
     }

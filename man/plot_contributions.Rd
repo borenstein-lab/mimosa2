@@ -5,8 +5,8 @@
 \title{Plot species contributions for a single metabolite}
 \usage{
 plot_contributions(varShares, metabolite, metIDcol = "metID",
-  include_zeros = F, include_residual = F, merge_threshold = 0.03,
-  spec_threshold = 10, color_palette = NULL)
+  include_zeros = F, include_residual = F, merge_threshold = 0.02,
+  spec_threshold = 10, color_palette = NULL, order_spec = T)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}
@@ -22,6 +22,8 @@ plot_contributions(varShares, metabolite, metIDcol = "metID",
 \item{spec_threshold}{Threshold number of minimum contributing species for merging into "other" to be applied}
 
 \item{color_palette}{Color palette to use for taxa in plot}
+
+\item{order_spec}{Whether to sort species by contribution size}
 }
 \value{
 plot of contributions

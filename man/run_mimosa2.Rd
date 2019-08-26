@@ -4,7 +4,8 @@
 \alias{run_mimosa2}
 \title{Run a MIMOSA 2 analysis}
 \usage{
-run_mimosa2(config_table, species = "", mets = "", compare_only = F)
+run_mimosa2(config_table, species = "", mets = "", compare_only = F,
+  make_plots = F)
 }
 \arguments{
 \item{config_table}{Data.table of input files and settings for MIMOSA analysis OR path to such a table}
@@ -14,6 +15,8 @@ run_mimosa2(config_table, species = "", mets = "", compare_only = F)
 \item{mets}{Optionally provide already-read-in metabolite data}
 
 \item{compare_only}{Skip contribution calculation, just build and fit model}
+
+\item{make_plots}{Whether to generate plots for each metabolite and extended output (as provided via the web server)}
 }
 \value{
 Scaling model and variance contribution results

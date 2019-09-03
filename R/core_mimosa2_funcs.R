@@ -1864,22 +1864,68 @@ run_mimosa2 = function(config_table, species = "", mets = "", compare_only = F, 
     var_shares = NULL
   }
   #Rxns, taxa summary
-  cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param, met_subset = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0,compound])
+  cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = F, kos_only = no_spec_param, humann2 = humann2_param, 
+                                met_subset = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0,compound], contrib_sizes = var_shares)
   cmp_mods[[1]] = merge(cmp_mods[[1]], cmp_summary$CompLevelSummary, by = "compound", all.x = T)
+  #Add species/rxn info
   
-  # if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){ #if we have a metagenome as well as 16s
-  #   indiv_cmps2 = get_cmp_scores_kos(species, metagenome_network)
-  #   cmp_mods2 = fit_cmp_mods(indiv_cmps2, mets_melt, rank_based = rank_based, rank_type = rank_type)
-  #   #indiv_cmps2 = add_residuals(indiv_cmps2, cmp_mods2[[1]], cmp_mods2[[2]])
-  #   var_shares_metagenome = calculate_var_shares(indiv_cmps2, met_table = mets_melt, model_results = cmp_mods, config_table = config_table)
-  #   var_shares_metagenome = merge(var_shares_metagenome, cmp_mods2[[1]], by = "compound", all.x = T)
-  #   return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network, varSharesMetagenome = var_shares_metagenome, ModelDataMetagenome = cmp_mods2, modelNetworkMetagenome = metagenome_network))
-  # } else {
-  if(make_plots){
-    
+  if(length(cmp_summary) > 1) var_shares = merge(var_shares, cmp_summary$SpeciesLevelSummary, by = c("compound", "Species"), all.x = T)
+  cmp_mods[[1]][,compound:=as.character(compound)]
+  indiv_cmps[,compound:=as.character(compound)]
+  
+  if(!is.null(var_shares)){
+    var_shares[,compound:=as.character(compound)]
+    var_shares[,Species:=as.character(Species)]
+    var_shares[,MetaboliteName:=met_names(as.character(compound))]
+    var_shares[is.na(MetaboliteName), MetaboliteName:=compound]
+    var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
   }
-  return(list(varShares = var_shares, modelData = cmp_mods[[1]], modelNetwork = network))
-#  }
+  if(make_plots){
+    CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])
+    
+    if(!compare_only){
+      comp_list = var_shares[!is.na(VarShare), unique(as.character(compound))]
+      comp_list = comp_list[!comp_list %in% var_shares[Species == "Residual" & VarShare == 1, as.character(compound)]]
+      all_contrib_taxa = var_shares[compound %in% comp_list & !is.na(VarShare) & Species != "Residual", as.character(unique(Species))]
+      getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+      if(var_shares[compound %in% comp_list & Species != "Residual", length(unique(Species[VarShare != 0])), by=compound][,any(V1 > 10)]){
+        contrib_color_palette = c("gray", getPalette(length(all_contrib_taxa))) #"black",  #Work with plotting function filters
+        names(contrib_color_palette) = c( "Other", all_contrib_taxa) #"Residual",
+      } else {
+        contrib_color_palette = getPalette(length(all_contrib_taxa)) #"black", 
+        names(contrib_color_palette) = all_contrib_taxa #"Residual",
+      }
+      met_contrib_plots = lapply(comp_list, function(x){
+        print(x)
+        if(is.na(met_names(x))){
+          met_id = x
+        } else { met_id = met_names(x)}
+        plot_contributions(var_shares, met_id, metIDcol = "MetaboliteName", color_palette = contrib_color_palette, include_residual = F, merge_threshold = 0.01)
+      })
+      #Contribution Legend
+      leg_dat = data.table(V1 = factor(names(contrib_color_palette), levels = c(all_contrib_taxa, "Other"))) #, "Residual"
+      setnames(leg_dat, "V1", "Contributing Taxa")
+      print(leg_dat)
+      legend_plot = ggplot(leg_dat, aes(fill = `Contributing Taxa`, x=`Contributing Taxa`)) + geom_bar() + scale_fill_manual(values = contrib_color_palette, name = "Contributing Taxa")# + theme(legend.text = element_text(size = 10))
+      contrib_legend = tryCatch(get_legend(legend_plot), error = function(){ return(NULL)}) 
+      } else {
+      met_contrib_plots = NULL
+      contrib_legend = NULL
+      }
+    }
+    if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
+      network[,KEGGReac:=agora_kegg_mets(Reac)]
+      network[,KEGGProd:=agora_kegg_mets(Prod)]
+    } 
+    analysis_summary = get_analysis_summary(input_species = data_inputs[[1]], species = species, mets = mets, network = network, indiv_cmps = indiv_cmps, cmp_mods = cmp_mods, var_shares = var_shares, config_table = config_table)
+    if(make_plots){
+      return(list(newSpecies = species, varShares = var_shares, modelData = cmp_mods[[1]], configs = config_table, 
+                  networkData = network, CMPScores = indiv_cmps[CMP != 0], CMPplots = CMP_plots, metContribPlots = met_contrib_plots, 
+                  plotLegend = contrib_legend, analysisSummary = analysis_summary))
+    } else {
+      return(list(newSpecies = species, varShares = var_shares, modelData = cmp_mods[[1]], configs = config_table, 
+                  networkData = network, CMPScores = indiv_cmps[CMP != 0], analysisSummary = analysis_summary))
+    }
 
 }
 

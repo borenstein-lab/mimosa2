@@ -24,7 +24,6 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "Rf
     all_comps = tot_cmps[,unique(compound)]
     model_dat = data.table(compound = all_comps, Intercept = 0, Slope = 0, Rsq = 0, PVal = 0) #Make all other columns numeric
     resid_dat = data.table(expand.grid(compound = all_comps, Sample = tot_cmps[,unique(Sample)]))
-    print(all_comps)
     for(x in 1:length(all_comps)){
       if(!rank_based){
         scaling_mod = tryCatch(tot_cmps[compound==all_comps[x], lm(value~V1)], error=function(e){ NA})
@@ -67,8 +66,6 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "Rf
           stop("Missing residuals")
         } 
         resid_dat[compound==all_comps[x], Resid:=scaling_resids]
-        print(model_dat[compound==all_comps[x]])
-        print(resid_dat[compound==all_comps[x]])
       }
     }
     return(list(model_dat, resid_dat))
@@ -262,7 +259,6 @@ fit_cmp_net_edit = function(network, species, mets_melt, manual_agora = F, rsq_f
     species_cmps = species_cmps[,sum(CMP), by=list(Sample, KO, compound)]
     setnames(species_cmps, "V1", "CMP")
   }
-  print(rxn_var)
   comp_order = mets_melt[,sd(value)/mean(value), by=compound][order(V1, decreasing = T), compound]
   model_dat = data.table(compound = comp_order)
   resid_dat = data.table(expand.grid(compound = comp_order, Sample = species_cmps[,unique(Sample)]))
@@ -1790,7 +1786,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #' @examples
 #' run_mimosa2(config_table, species, mets)
 #' @export
-run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F){
+run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, save_plots = F){
   #process arguments
   #Read config table if it is filename
     if(typeof(config_table)=="character"){
@@ -1906,7 +1902,6 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F){
         spec_dat = melt(species, id.var = "OTU", variable.name = "Sample")[,list(value/sum(value), OTU), by=Sample] #convert to relative abundance
         bad_spec = spec_dat[,list(length(V1[V1 != 0])/length(V1), max(V1)), by=OTU]
         bad_spec = bad_spec[V1 < 0.1 & V2 < 0.1, OTU] #Never higher than 10% and absent in at least 90% of samples
-        print(bad_spec)
       } else bad_spec = NULL
       if("signifThreshold" %in% config_table[,V1]){
         signifThreshold = config_table[V1 == "signifThreshold", as.numeric(V2)]
@@ -1952,16 +1947,14 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F){
           names(contrib_color_palette) = all_contrib_taxa #"Residual",
         }
         met_contrib_plots = lapply(comp_list, function(x){
-          print(x)
           if(is.na(met_names(x))){
             met_id = x
           } else { met_id = met_names(x)}
-          plot_contributions(var_shares, met_id, metIDcol = "MetaboliteName", color_palette = contrib_color_palette, include_residual = F, merge_threshold = 0.01)
+          plot_contributions(var_shares, met_id, metIDcol = "MetaboliteName", color_palette = contrib_color_palette, include_residual = F, merge_threshold = 0.01) + theme(plot.background = element_blank())
         })
         #Contribution Legend
         leg_dat = data.table(V1 = factor(names(contrib_color_palette), levels = c(all_contrib_taxa, "Other"))) #, "Residual"
         setnames(leg_dat, "V1", "Contributing Taxa")
-        print(leg_dat)
         legend_plot = ggplot(leg_dat, aes(fill = `Contributing Taxa`, x=`Contributing Taxa`)) + geom_bar() + scale_fill_manual(values = contrib_color_palette, name = "Contributing Taxa")# + theme(legend.text = element_text(size = 10))
         contrib_legend = tryCatch(get_legend(legend_plot), error = function(){ return(NULL)}) 
       } else {
@@ -1974,6 +1967,27 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F){
       network[,KEGGProd:=agora_kegg_mets(Prod)]
     } 
     analysis_summary = get_analysis_summary(input_species = data_inputs[[1]], species = species, mets = mets, network = network, indiv_cmps = indiv_cmps, cmp_mods = cmp_mods, var_shares = var_shares, config_table = config_table)
+    if(save_plots & make_plots){
+      #Save plots
+      if(!dir.exists("mimosa2plots")){
+        dir.create(path = "mimosa2plots", showWarnings = T)
+      }
+      for(i in 1:length(CMP_plots)){
+        print(paste0("mimosa2plots/", names(CMP_plots)[i], ".png"))
+        if(!identical(CMP_plots[[i]], NA)){
+          save_plot(CMP_plots[[i]], file = paste0("mimosa2plots/", names(CMP_plots)[i], ".png"), base_width = 2, base_height = 2)
+        } 
+      }
+      if(!config_table[V1 == "compare_only", V2==T]){
+        for(i in 1:length(met_contrib_plots)){
+          print(comp_list[i])
+          if(!is.null(met_contrib_plots[[i]])){
+            save_plot(met_contrib_plots[[i]] + guides(fill = F), file = paste0("mimosa2plots/", comp_list[i], "_contribs.png"), base_width = 2, base_height = 2)
+          }
+        }
+        if(!is.null(contrib_legend)) save_plot(contrib_legend, file = paste0("mimosa2plots/contribLegend.png"), dpi=120, base_width = 5, base_height = 4)
+      } 
+    }
     if(make_plots){
       return(list(varShares = var_shares, modelData = cmp_mods[[1]], 
                   networkData = network, newSpecies = species, CMPScores = indiv_cmps[CMP != 0], 

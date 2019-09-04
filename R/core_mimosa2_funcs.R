@@ -695,11 +695,12 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
   #Only if doing all compounds at once
   species_cmps = melt(dcast(species_cmps, compound+Sample~Species, value.var = "CMP", fill = 0), id.vars = c("compound", "Sample"), variable.name = "Species", value.name = "CMP")
   #Get predictions from full model
+  species_cmps[,Species:=as.character(Species)]
   species_cmps = merge(species_cmps, cmp_mods[[1]][,list(compound, Intercept, Slope)], by = "compound", all.x = T)
-  species_cmps[,PredVal:=CMP*Slope+Intercept]
+  species_cmps[,PredVal:=CMP*Slope] #+Intercept]
   species_cmps = merge(species_cmps, mets_melt, by = c("compound", "Sample"), all.x = T)
   
-  spec_list = species_cmps[,sort(unique(as.character(Species)))]
+  spec_list = species_cmps[,sort(unique(Species))]
   nspec = length(spec_list)
   if(nspec == 1){
     allContribs = mod_fit_true
@@ -724,12 +725,13 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
     allContribs_mean_all = data.table()
     for(k in 1:length(comp_list)){
       cmps1 = species_cmps[compound == comp_list[k]]
-      new_spec_list = cmps1[CMP != 0,sort(unique(as.character(Species)))]
+      new_spec_list = spec_list[spec_list %in% cmps1[CMP != 0, Species]]
       nspec = length(new_spec_list)
+      cmps1a = as.matrix(dcast(cmps1, Sample~Species, value.var = "PredVal")[,2:(nspec+1)])
       cat(nspec, "taxa for compound", comp_list[k], "\n")
       null_disp_comp = mod_fit_true[compound == comp_list[k], NullDisp]
       true_rsq = mod_fit_true[compound == comp_list[k], TrueRsq]
-      met_vals = mets_melt[compound==comp_list[k]][order(Sample),value]
+      met_vals = species_cmps[compound==comp_list[k] & Species==new_spec_list[1]]$value #same order this way
       if(nspec==1){
         allContribs = data.table(compound = comp_list[k])
         allContribs[, (new_spec_list):= true_rsq]
@@ -760,6 +762,7 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
         
         #For each random ordering, calculate marginal effect of each species
         for(perm_id in 1:nperm){
+          #cmps1 = species_cmps[compound == comp_list[k]]
           cumulMetVars = rep(0, nspec)
           cumulMetVarsMarg = rep(0, nspec)
           # cumulMetVars = copy(cumulMetVarTemplate[compound == comp_list[k]])
@@ -768,7 +771,9 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
           for(j in 1:nspec){
             if(j < nspec){
               #we are removing species spec_order[j] at each iteration
-              cmps1 = cmps1[Species != new_spec_list[spec_order[j]]]
+              #print(cmps1)
+              #cmps1 = cmps1[Species != new_spec_list[spec_order[j]]]
+              
               #Skip compounds where this species changes nothing - automatically 0
               #zero_comps = cmps1[Species == spec_list[spec_order[j]], length(CMP[CMP != 0]), by=compound][V1==0, compound]
               #perm_dat = perm_dat[!compound %in% zero_comps]
@@ -776,7 +781,13 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
               #fit model under permutation
               #Calculate new disp
               
-              tot_pred = cmps1[,sum(PredVal), by=Sample]$V1
+              #tot_pred = cmps1[,sum(PredVal), by=Sample]$V1
+              #print(tot_pred)
+              if(j < nspec-1){
+                tot_pred = rowSums(cmps1a[,-spec_order[1:j]])
+              } else { #one column, nothing to sum
+                tot_pred = cmps1a[,-spec_order[1:j]]
+              }
               new_disp = j.disp.fit(tot_pred, met_vals) #, by=compound]
               #cumulMetVars = merge(cumulMetVars, new_disp, by = "compound", all.x = T)
               if(!adj_rsq){

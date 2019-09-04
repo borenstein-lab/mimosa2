@@ -107,7 +107,7 @@ get_net_dist = function(c1, c2, allnet, max_dist = 20){
 #' @param rxn_table Edge list
 #' @param all_rxns Whether to return all reactions or only 1/2 of each reversible reaction since info is redundant
 #' @param by_species Whether this is a species-specific network
-#' @return Network with reversibility informatio
+#' @return Network with reversibility information
 #' @examples
 #' get_non_rev_rxns(rxn_table)
 #' @export

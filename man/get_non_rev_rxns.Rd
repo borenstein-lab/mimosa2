@@ -14,7 +14,7 @@ get_non_rev_rxns(rxn_table, all_rxns = T, by_species = T)
 \item{by_species}{Whether this is a species-specific network}
 }
 \value{
-Network with reversibility informatio
+Network with reversibility information
 }
 \description{
 Get non-reverible reactions of network.

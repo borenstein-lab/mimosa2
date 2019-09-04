@@ -704,7 +704,6 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
   species_cmps = merge(species_cmps, mets_melt, by = c("compound", "Sample"), all.x = T)
   
   spec_list = species_cmps[,sort(unique(as.character(Species)))]
-  print(spec_list)
   nspec = length(spec_list)
   if(nspec == 1){
     allContribs = mod_fit_true
@@ -720,20 +719,23 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
   } else {
     comp_list = mod_fit_true[,compound]
     #Create all columns to begin with
-    cumulMetVarTemplate = copy(mod_fit_true)
-    for(m in 1:length(spec_list)){
-      cumulMetVarTemplate[,(spec_list[m]):=0]
-      cumulMetVarTemplate[,(paste0("Marg_", spec_list[m])):=0]
-    }
+    # cumulMetVarTemplate = copy(mod_fit_true)
+    # cumulMetVarTemplateMarg = copy(mod_fit_true)
+    # for(m in 1:length(spec_list)){
+    #   cumulMetVarTemplate[,(spec_list[m]):=0]
+    #   cumulMetVarTemplateMarg[,(spec_list[m]):=0]
+    # }
     allContribs_mean_all = data.table()
     for(k in 1:length(comp_list)){
       cmps1 = species_cmps[compound == comp_list[k]]
       new_spec_list = cmps1[CMP != 0,sort(unique(as.character(Species)))]
       nspec = length(new_spec_list)
       cat(nspec, "taxa for compound", comp_list[k], "\n")
+      null_disp_comp = mod_fit_true[compound == comp_list[k], NullDisp]
+      true_rsq = mod_fit_true[compound == comp_list[k], TrueRsq]
       if(nspec==1){
-        allContribs = cumulMetVarTemplate[compound == comp_list[k]]
-        allContribs[,(paste0("Marg_", new_spec_list)):=TrueRsq]
+        allContribs = data.table(compound = comp_list[k])
+        allContribs[, (new_spec_list):= true_rsq]
       } else {
         if(factorial(nspec) < nperm_taxa*nspec & factorial(nspec) < nperm_max){
           cat("Calculating contributions across all possible subsets\n")
@@ -757,11 +759,14 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
           #   sample.int(nspec)
           # }) 
         }
-        allContribs = data.table()
+        allContribs = matrix(nrow = nperm, ncol = length(new_spec_list))
         
         #For each random ordering, calculate marginal effect of each species
         for(perm_id in 1:nperm){
-          cumulMetVars = copy(cumulMetVarTemplate[compound == comp_list[k]])
+          cumulMetVars = rep(0, nspec)
+          cumulMetVarsMarg = rep(0, nspec)
+          # cumulMetVars = copy(cumulMetVarTemplate[compound == comp_list[k]])
+          # cumulMetVarsMarg = copy(cumulMetVarTemplateMarg[compound == comp_list[k]])
           spec_order = R1[,perm_id]
           for(j in 1:nspec){
             if(j < nspec){
@@ -773,11 +778,13 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
               #fit model under permutation
               #Calculate new disp
               
-              tot_pred = perm_dat[,sum(PredVal), by=list(compound, Sample, value)]
+              tot_pred = perm_dat[,sum(PredVal), by=list(Sample, value)]
               new_disp = tot_pred[,j.disp.fit(V1, value)] #, by=compound]
               #cumulMetVars = merge(cumulMetVars, new_disp, by = "compound", all.x = T)
               if(!adj_rsq){
-                cumulMetVars[,(new_spec_list[spec_order[j]]):=(1-new_disp/NullDisp)]
+                cumulMetVars[spec_order[j]] = (1-new_disp/null_disp_comp)
+                #set(cumulMetVars, 1, 3+spec_order[j], (1-new_disp/null_disp_comp))
+                #cumulMetVars[,(new_spec_list[spec_order[j]]):=(1-new_disp/null_disp_comp)]
               } else {
                 cumulMetVars[,(new_spec_list[spec_order[j]]):=j.disp.rsq.adj(NullDisp, model_disp = V1, tauhat = Tauhat, df2 = DF2)]
               }
@@ -794,34 +801,44 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
                 #cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]])] #Same as previous
                 #set(cumulMetVars, nonzero_rows, paste0("Marg_", spec_list[spec_order[j]]), spec_list[spec_order[j-1]])
                 #cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=get(spec_list[spec_order[j-1]]) - get(spec_list[spec_order[j]])]
-                cumulMetVars[,paste0("Marg_", new_spec_list[spec_order[j]]):=get(new_spec_list[spec_order[j-1]]) - get(new_spec_list[spec_order[j]])]
+                #cumulMetVars[,paste0("Marg_", new_spec_list[spec_order[j]]):=get(new_spec_list[spec_order[j-1]]) - get(new_spec_list[spec_order[j]])]
+                #set(cumulMetVarsMarg, 1, 3+spec_order[j], cumulMetVars[1, 3+spec_order[j]-1]-cumulMetVars[1, 3+spec_order[j]])
+                cumulMetVarsMarg[spec_order[j]] = cumulMetVars[spec_order[j-1]] - cumulMetVars[spec_order[j]]
               } else {
-                cumulMetVars[,paste0("Marg_", new_spec_list[spec_order[j]]):=TrueRsq - get(new_spec_list[spec_order[j]])]
+                #cumulMetVars[,paste0("Marg_", new_spec_list[spec_order[j]]):=TrueRsq - get(new_spec_list[spec_order[j]])]
+                #set(cumulMetVarsMarg, 1, 3+j, true_rsq-cumulMetVars[1, 3+j])
+                cumulMetVarsMarg[spec_order[j]] = true_rsq - cumulMetVars[spec_order[j]]
                 # cumulMetVars[compound %in% zero_comps, (spec_list[spec_order[j]]):=TrueRsq] #Same as orig
                 # cumulMetVars[!compound %in% zero_comps,paste0("Marg_", spec_list[spec_order[j]]):=TrueRsq - get(spec_list[spec_order[j]])]
               }
             } else { #Final iteration
               #cumulMetVars[,(spec_list[spec_order[j]]):=0] 
-              cumulMetVars[,paste0("Marg_", new_spec_list[spec_order[j]]):=get(new_spec_list[spec_order[j-1]])]
+              #cumulMetVars[,paste0("Marg_", new_spec_list[spec_order[j]]):=get(new_spec_list[spec_order[j-1]])]
+              #set(cumulMetVarsMarg, 1, 3+j, cumulMetVars[1, 3+j-1])
+              cumulMetVarsMarg[spec_order[j]] = cumulMetVars[spec_order[j-1]]
             }
           }
-          cumulMetVars[,OrderID:=perm_id]
-          cumulMetVars = cumulMetVars[,c("compound","TrueRsq", sort(names(cumulMetVars)[3:ncol(cumulMetVars)])), with=F]
-          allContribs = rbind(allContribs, cumulMetVars, fill = T)
+          #cumulMetVars[,OrderID:=perm_id]
+          #cumulMetVars = cumulMetVars[,c("compound","TrueRsq", sort(names(cumulMetVars)[3:ncol(cumulMetVars)])), with=F]
+          #cumulMetVarsMarg[,TrueRsq:=true_rsq]
+          allContribs[perm_id,] = cumulMetVarsMarg
         }
+        allContribs = data.table(compound = comp_list[k], allContribs)
+        setnames(allContribs, names(allContribs)[2:ncol(allContribs)], new_spec_list)
       }
-      allContribs_mean = allContribs[,lapply(.SD, mean), by=compound, .SDcols = paste0("Marg_", spec_list)]
-      setnames(allContribs_mean, gsub("Marg_", "", names(allContribs_mean)))
+      allContribs_mean = allContribs[,lapply(.SD, mean), by=compound, .SDcols = new_spec_list]#paste0("Marg_", spec_list)]
+      #setnames(allContribs_mean, gsub("Marg_", "", names(allContribs_mean)))
       allContribs_mean = melt(allContribs_mean, variable.name = "Species", id.var = "compound")
-      allContribs_mean_all = rbind(allContribs_mean_all, allContribs_mean, fill = T)
+      allContribs_mean_all = rbind(allContribs_mean_all, allContribs_mean, fill = T) # we will have to set NAs to 0
     }
-    
+    allContribs_mean_all = melt(dcast(allContribs_mean_all, compound~Species, fill = 0), id.var = "compound", variable.name = "Species")
     allContribs_mean_all = merge(allContribs_mean_all, mod_fit_true, by = "compound", all = T)
     if(adj_rsq) allContribs_mean_all[,DF2:=NULL]
     
     ## Format like variance contributions
-    print(allContribs_mean_all)
-    allContribs_mean_all[,VarShare:=value]
+    #print(allContribs_mean_all)
+    #allContribs_mean_all[,VarShare:=value]
+    setnames(allContribs_mean_all, "value", "VarShare")
     if(add_residual){
       mod_fit_true[,ResidualContrib:=1-TrueRsq]
       resid_dat = data.table(mod_fit_true[,list(compound, TrueRsq, 1-TrueRsq)], Species = "Residual")
@@ -1251,8 +1268,6 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
           network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
         } else {
           #Humann2 species-KO table
-          #We need to think about this a little more. calculation of CMP scores/copy numbers in particular.
-          print(species)
           mod_list = species[,unique(OTU)]
           network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
           network = rbindlist(lapply(mod_list, function(x){ #Generate network based on KOs identified in each species
@@ -1291,6 +1306,12 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
   # }
   if(config_table[V1=="database", V2!=get_text("database_choices")[4]]) network = network[OTU %in% species[,OTU]]
   network = filter_currency_metabolites(network, degree_filter = degree_filt)
+  #Get reversible status
+  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+    network = get_non_rev_rxns(network, by_species == F)
+  } else {
+    network = get_non_rev_rxns(network, all_rxns = T, by_species = T)
+  }
   return(list(network, species))
 }
 
@@ -1335,7 +1356,6 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     if(length(intersect(spec_list, network[,unique(OTU)]))==0) stop("All taxa missing network information, is this the correct network model?")
     if(!all(spec_list %in% network[,unique(OTU)])) warning("Some taxa missing network information")
     if(remove_rev){ #Remove reversible reactions
-      network = get_non_rev_rxns(network, all_rxns = T, by_species = T)
       network = network[Reversible==0]
     }
     network_reacs = network[,list(OTU, KO, Reac, stoichReac, normalized_copy_number)]
@@ -1560,7 +1580,7 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, re
     ko_table_melt[,value:=value/sum(value)*1000, by=Sample]
   }
   if(remove_rev){ #Remove reversible reactions
-    network = get_non_rev_rxns(network, all_rxns = T, by_species = F)
+    #network = get_non_rev_rxns(network, all_rxns = T, by_species = F)
     network = network[Reversible==0]
   }
   network_reacs = network[,list(KO, Reac, stoichReac)]
@@ -1773,180 +1793,180 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F){
   #process arguments
   #Read config table if it is filename
-  if(typeof(config_table)=="character"){
-    config_table = fread(config_table, header = F)
-  }
-  if(!identical(species, "") & !identical(mets, "")){
-    config_table = check_config_table(config_table, app = T)
-    data_inputs = list(species = species, mets = mets)
-  } else {
-    config_table = check_config_table(config_table, app = F)
-    file_list = as.list(config_table[grepl("file", V1, ignore.case = T), V2])
-    names(file_list) = config_table[grepl("file", V1, ignore.case = T), V1]
-    data_inputs = read_mimosa2_files(file_list, config_table, app = F)
-    species = data_inputs$species
-    mets = data_inputs$mets
-  }
-  if(!"manualAGORA" %in% config_table[,V1]){
-    network_results = build_metabolic_model(species, config_table, degree_filt = 0, netAdd = data_inputs$netAdd)
-    network = network_results[[1]]
-    species = network_results[[2]]
-  } else {
-    network_results = build_metabolic_model(species, config_table, manual_agora = T, degree_filt = 0, netAdd = data_inputs$netAdd)
-    network = network_results[[1]]
-    species = network_results[[2]]
-  }
-  # if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]){
-  #   #If we are doing a comparison of the species network and the metagenome network
-  #   #Metagenome data
-  #   #Implement doing stuff with this later
-  #   metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table, netAdd = data_inputs$netAdd)
-  #   # species2 = metagenome_data[[1]]
-  #   # metagenome_network = metagenome_data[[2]]
-  #   #Metagenome data
-  # }
-
-  if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
-    mets = map_to_kegg(mets)
-  }
-  #Get CMP scores
-  if("rxnEdit" %in% config_table[,V1]){
-    rxn_param = T
-    cat("Will refine reaction network\n")
-  } else rxn_param = F
-  if("rankBased" %in% config_table[,V1]){
-    rank_based = T
-    cat("Will use rank-based/robust regression\n")
-    if("rank_type" %in% config_table[,V1]){
-      rank_type = config_table[V1=="rank_type", V2]
-    } else {
-      rank_type = "rfit"
+    if(typeof(config_table)=="character"){
+      config_table = fread(config_table, header = F)
     }
-    cat(paste0("Regression type is ", rank_type, "\n"))
-  } else rank_based = F
-  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
-    no_spec_param = T
-    humann2_param = F
-  } else if(config_table[V1=="database", V2==get_text("database_choices")[5]]){
-    no_spec_param = F
-    humann2_param = T
-  } else {
-    no_spec_param = F
-    humann2_param = F
-  }
-  if("manualAGORA" %in% config_table[,V1]){
-    agora_param = T
-    cat("Manual AGORA models\n")
-  } else {
-    agora_param = F
-  }
-  # if("revRxns" %in% config_table[,V1]){ #Whether to add reverse of reversible-annotated rxns - mainly for agora networks
-  #   network = add_rev_rxns(network, sameID = T) # Give reverse the same rxn ID
-  #   cat("Will add reverse of reversible reactions\n")
-  # }
-  # if("refine" %in% config_table[,V1]){
-  #   network = refine_rev_rxns(network, )
-  # }
-  if("met_transform" %in% config_table[,V1]){
-    met_transform = config_table[V1=="met_transform", V2]
-    cat(paste0("Will transform metabolite values, transform is ", met_transform))
-  } else met_transform = ""
-  if("score_transform" %in% config_table[,V1]){
-    score_transform = config_table[V1=="score_transform", V2]
-    cat(paste0("Will transform CMP values, transform is ", score_transform))
-  } else score_transform = ""
-  
-  if(config_table[V1=="compare_only", V2==T]){
-    compare_only = T
-  } else {
-    compare_only = F
-  }
-  
-  #indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
-  mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
-  if(met_transform != ""){
-    mets_melt = transform_mets(mets_melt, met_transform)
-  }
-  if(rxn_param){
-    cmp_mods =  fit_cmp_net_edit(network, species, mets_melt, manual_agora = agora_param, rank_based = rank_based)
-    network = cmp_mods[[3]] #Revised network
-    indiv_cmps = cmp_mods[[4]]
-    #Will have to report nice summary of rxns removed, rxns direction switched, etc
-  } else {
-    indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param)
-    if(score_transform != ""){
-      indiv_cmps = transform_cmps(indiv_cmps, score_transform)
-    }
-    indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
-    cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
-  }
-  #indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
-  if(!compare_only & !no_spec_param){ #Option to skip contributions
-    if(!humann2_param){
-      spec_dat = melt(species, id.var = "OTU", variable.name = "Sample")[,list(value/sum(value), OTU), by=Sample] #convert to relative abundance
-      bad_spec = spec_dat[,list(length(V1[V1 != 0])/length(V1), max(V1)), by=OTU]
-      bad_spec = bad_spec[V1 < 0.1 & V2 < 0.1, OTU] #Never higher than 10% and absent in at least 90% of samples
-      print(bad_spec)
-    } else bad_spec = NULL
-    if("signifThreshold" %in% config_table[,V1]){
-      signifThreshold = config_table[V1 == "signifThreshold", as.numeric(V2)]
+    if(!identical(species, "") & !identical(mets, "")){
+      config_table = check_config_table(config_table, app = T)
+      data_inputs = list(species = species, mets = mets)
     } else {
-      signifThreshold = 0.2
+      config_table = check_config_table(config_table, app = F)
+      file_list = as.list(config_table[grepl("file", V1, ignore.case = T), V2])
+      names(file_list) = config_table[grepl("file", V1, ignore.case = T), V1]
+      data_inputs = read_mimosa2_files(file_list, config_table, app = F)
+      species = data_inputs$species
+      mets = data_inputs$mets
     }
-    time1 = Sys.time()
-    var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table, species_merge = bad_spec, signif_threshold = signifThreshold)
-    cat(paste0("Contribution calculation time: ", Sys.time() - time1, "\n"))
+    if(!"manualAGORA" %in% config_table[,V1]){
+      network_results = build_metabolic_model(species, config_table, degree_filt = 0, netAdd = data_inputs$netAdd)
+      network = network_results[[1]]
+      species = network_results[[2]]
     } else {
-    var_shares = NULL
-  }
-  #Rxns, taxa summary
-  cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = F, kos_only = no_spec_param, humann2 = humann2_param, 
-                                met_subset = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0,compound], contrib_sizes = var_shares)
-  cmp_mods[[1]] = merge(cmp_mods[[1]], cmp_summary$CompLevelSummary, by = "compound", all.x = T)
-  #Add species/rxn info
-  
-  if(length(cmp_summary) > 1) var_shares = merge(var_shares, cmp_summary$SpeciesLevelSummary, by = c("compound", "Species"), all.x = T)
-  cmp_mods[[1]][,compound:=as.character(compound)]
-  indiv_cmps[,compound:=as.character(compound)]
-  
-  if(!is.null(var_shares)){
-    var_shares[,compound:=as.character(compound)]
-    var_shares[,Species:=as.character(Species)]
-    var_shares[,MetaboliteName:=met_names(as.character(compound))]
-    var_shares[is.na(MetaboliteName), MetaboliteName:=compound]
-    var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
-  }
-  if(make_plots){
-    CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])
+      network_results = build_metabolic_model(species, config_table, manual_agora = T, degree_filt = 0, netAdd = data_inputs$netAdd)
+      network = network_results[[1]]
+      species = network_results[[2]]
+    }
+    # if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]){
+    #   #If we are doing a comparison of the species network and the metagenome network
+    #   #Metagenome data
+    #   #Implement doing stuff with this later
+    #   metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table, netAdd = data_inputs$netAdd)
+    #   # species2 = metagenome_data[[1]]
+    #   # metagenome_network = metagenome_data[[2]]
+    #   #Metagenome data
+    # }
     
-    if(!compare_only){
-      comp_list = var_shares[!is.na(VarShare), unique(as.character(compound))]
-      comp_list = comp_list[!comp_list %in% var_shares[Species == "Residual" & VarShare == 1, as.character(compound)]]
-      all_contrib_taxa = var_shares[compound %in% comp_list & !is.na(VarShare) & Species != "Residual", as.character(unique(Species))]
-      getPalette = colorRampPalette(brewer.pal(12, "Paired"))
-      if(var_shares[compound %in% comp_list & Species != "Residual", length(unique(Species[VarShare != 0])), by=compound][,any(V1 > 10)]){
-        contrib_color_palette = c("gray", getPalette(length(all_contrib_taxa))) #"black",  #Work with plotting function filters
-        names(contrib_color_palette) = c( "Other", all_contrib_taxa) #"Residual",
+    if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
+      mets = map_to_kegg(mets)
+    }
+    #Get CMP scores
+    if("rxnEdit" %in% config_table[,V1]){
+      rxn_param = T
+      cat("Will refine reaction network\n")
+    } else rxn_param = F
+    if("rankBased" %in% config_table[,V1]){
+      rank_based = T
+      cat("Will use rank-based/robust regression\n")
+      if("rank_type" %in% config_table[,V1]){
+        rank_type = config_table[V1=="rank_type", V2]
       } else {
-        contrib_color_palette = getPalette(length(all_contrib_taxa)) #"black", 
-        names(contrib_color_palette) = all_contrib_taxa #"Residual",
+        rank_type = "rfit"
       }
-      met_contrib_plots = lapply(comp_list, function(x){
-        print(x)
-        if(is.na(met_names(x))){
-          met_id = x
-        } else { met_id = met_names(x)}
-        plot_contributions(var_shares, met_id, metIDcol = "MetaboliteName", color_palette = contrib_color_palette, include_residual = F, merge_threshold = 0.01)
-      })
-      #Contribution Legend
-      leg_dat = data.table(V1 = factor(names(contrib_color_palette), levels = c(all_contrib_taxa, "Other"))) #, "Residual"
-      setnames(leg_dat, "V1", "Contributing Taxa")
-      print(leg_dat)
-      legend_plot = ggplot(leg_dat, aes(fill = `Contributing Taxa`, x=`Contributing Taxa`)) + geom_bar() + scale_fill_manual(values = contrib_color_palette, name = "Contributing Taxa")# + theme(legend.text = element_text(size = 10))
-      contrib_legend = tryCatch(get_legend(legend_plot), error = function(){ return(NULL)}) 
+      cat(paste0("Regression type is ", rank_type, "\n"))
+    } else rank_based = F
+    if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+      no_spec_param = T
+      humann2_param = F
+    } else if(config_table[V1=="database", V2==get_text("database_choices")[5]]){
+      no_spec_param = F
+      humann2_param = T
+    } else {
+      no_spec_param = F
+      humann2_param = F
+    }
+    if("manualAGORA" %in% config_table[,V1]){
+      agora_param = T
+      cat("Manual AGORA models\n")
+    } else {
+      agora_param = F
+    }
+    # if("revRxns" %in% config_table[,V1]){ #Whether to add reverse of reversible-annotated rxns - mainly for agora networks
+    #   network = add_rev_rxns(network, sameID = T) # Give reverse the same rxn ID
+    #   cat("Will add reverse of reversible reactions\n")
+    # }
+    # if("refine" %in% config_table[,V1]){
+    #   network = refine_rev_rxns(network, )
+    # }
+    if("met_transform" %in% config_table[,V1]){
+      met_transform = config_table[V1=="met_transform", V2]
+      cat(paste0("Will transform metabolite values, transform is ", met_transform))
+    } else met_transform = ""
+    if("score_transform" %in% config_table[,V1]){
+      score_transform = config_table[V1=="score_transform", V2]
+      cat(paste0("Will transform CMP values, transform is ", score_transform))
+    } else score_transform = ""
+    
+    if(config_table[V1=="compare_only", V2==T]){
+      compare_only = T
+    } else {
+      compare_only = F
+    }
+    
+    #indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
+    mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
+    if(met_transform != ""){
+      mets_melt = transform_mets(mets_melt, met_transform)
+    }
+    if(rxn_param){
+      cmp_mods =  fit_cmp_net_edit(network, species, mets_melt, manual_agora = agora_param, rank_based = rank_based)
+      network = cmp_mods[[3]] #Revised network
+      indiv_cmps = cmp_mods[[4]]
+      #Will have to report nice summary of rxns removed, rxns direction switched, etc
+    } else {
+      indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param)
+      if(score_transform != ""){
+        indiv_cmps = transform_cmps(indiv_cmps, score_transform)
+      }
+      indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
+      cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
+    }
+    #indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
+    if(!compare_only & !no_spec_param){ #Option to skip contributions
+      if(!humann2_param){
+        spec_dat = melt(species, id.var = "OTU", variable.name = "Sample")[,list(value/sum(value), OTU), by=Sample] #convert to relative abundance
+        bad_spec = spec_dat[,list(length(V1[V1 != 0])/length(V1), max(V1)), by=OTU]
+        bad_spec = bad_spec[V1 < 0.1 & V2 < 0.1, OTU] #Never higher than 10% and absent in at least 90% of samples
+        print(bad_spec)
+      } else bad_spec = NULL
+      if("signifThreshold" %in% config_table[,V1]){
+        signifThreshold = config_table[V1 == "signifThreshold", as.numeric(V2)]
       } else {
-      met_contrib_plots = NULL
-      contrib_legend = NULL
+        signifThreshold = 0.2
+      }
+      time1 = Sys.time()
+      var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table, species_merge = bad_spec, signif_threshold = signifThreshold)
+      cat(paste0("Contribution calculation time: ", Sys.time() - time1, "\n"))
+    } else {
+      var_shares = NULL
+    }
+    #Rxns, taxa summary
+    cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = F, kos_only = no_spec_param, humann2 = humann2_param, 
+                                  met_subset = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0,compound], contrib_sizes = var_shares)
+    cmp_mods[[1]] = merge(cmp_mods[[1]], cmp_summary$CompLevelSummary, by = "compound", all.x = T)
+    #Add species/rxn info
+    
+    if(length(cmp_summary) > 1) var_shares = merge(var_shares, cmp_summary$SpeciesLevelSummary, by = c("compound", "Species"), all.x = T)
+    cmp_mods[[1]][,compound:=as.character(compound)]
+    indiv_cmps[,compound:=as.character(compound)]
+    
+    if(!is.null(var_shares)){
+      var_shares[,compound:=as.character(compound)]
+      var_shares[,Species:=as.character(Species)]
+      var_shares[,MetaboliteName:=met_names(as.character(compound))]
+      var_shares[is.na(MetaboliteName), MetaboliteName:=compound]
+      var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
+    }
+    if(make_plots){
+      CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])
+      
+      if(!compare_only){
+        comp_list = var_shares[!is.na(VarShare), unique(as.character(compound))]
+        comp_list = comp_list[!comp_list %in% var_shares[Species == "Residual" & VarShare == 1, as.character(compound)]]
+        all_contrib_taxa = var_shares[compound %in% comp_list & !is.na(VarShare) & Species != "Residual", as.character(unique(Species))]
+        getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+        if(var_shares[compound %in% comp_list & Species != "Residual", length(unique(Species[VarShare != 0])), by=compound][,any(V1 > 10)]){
+          contrib_color_palette = c("gray", getPalette(length(all_contrib_taxa))) #"black",  #Work with plotting function filters
+          names(contrib_color_palette) = c( "Other", all_contrib_taxa) #"Residual",
+        } else {
+          contrib_color_palette = getPalette(length(all_contrib_taxa)) #"black", 
+          names(contrib_color_palette) = all_contrib_taxa #"Residual",
+        }
+        met_contrib_plots = lapply(comp_list, function(x){
+          print(x)
+          if(is.na(met_names(x))){
+            met_id = x
+          } else { met_id = met_names(x)}
+          plot_contributions(var_shares, met_id, metIDcol = "MetaboliteName", color_palette = contrib_color_palette, include_residual = F, merge_threshold = 0.01)
+        })
+        #Contribution Legend
+        leg_dat = data.table(V1 = factor(names(contrib_color_palette), levels = c(all_contrib_taxa, "Other"))) #, "Residual"
+        setnames(leg_dat, "V1", "Contributing Taxa")
+        print(leg_dat)
+        legend_plot = ggplot(leg_dat, aes(fill = `Contributing Taxa`, x=`Contributing Taxa`)) + geom_bar() + scale_fill_manual(values = contrib_color_palette, name = "Contributing Taxa")# + theme(legend.text = element_text(size = 10))
+        contrib_legend = tryCatch(get_legend(legend_plot), error = function(){ return(NULL)}) 
+      } else {
+        met_contrib_plots = NULL
+        contrib_legend = NULL
       }
     }
     if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
@@ -1963,6 +1983,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F){
       return(list(varShares = var_shares, modelData = cmp_mods[[1]], networkData = network, newSpecies = species, 
                   CMPScores = indiv_cmps[CMP != 0], analysisSummary = analysis_summary, configs = config_table))
     }
+    
 
 }
 

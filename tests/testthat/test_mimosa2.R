@@ -424,12 +424,12 @@ test_that("Metagenome stratified option works", {
   
 })
 
-test_that("Rank contribution timing", {
-  config1 = fread(test_config_file1, header = F, fill = T)
-  config1[V1=="database", V2:=get_text("database_choices")[2]]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
-  config1[V1=="file1", V2:="test_gg.txt"]
-  config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
-  config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
-  foo = run_mimosa2(config1)
-})
+# test_that("Rank contribution timing", {
+#   config1 = fread(test_config_file1, header = F, fill = T)
+#   config1[V1=="database", V2:=get_text("database_choices")[2]]
+#   config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+#   config1[V1=="file1", V2:="test_gg.txt"]
+#   config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
+#   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
+#   foo = run_mimosa2(config1)
+# })

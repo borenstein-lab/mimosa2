@@ -6,7 +6,8 @@
 \usage{
 plot_contributions(varShares, metabolite, metIDcol = "metID",
   include_zeros = F, include_residual = F, merge_threshold = 0.02,
-  spec_threshold = 10, color_palette = NULL, order_spec = T)
+  spec_threshold = 10, color_palette = NULL, order_spec = T,
+  taxa_max = 15)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}
@@ -24,6 +25,8 @@ plot_contributions(varShares, metabolite, metIDcol = "metID",
 \item{color_palette}{Color palette to use for taxa in plot}
 
 \item{order_spec}{Whether to sort species by contribution size}
+
+\item{taxa_max}{If this compound has more than this many contributing taxa, only this number will be plotted}
 }
 \value{
 plot of contributions

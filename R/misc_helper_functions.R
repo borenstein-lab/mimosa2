@@ -44,6 +44,9 @@ read_files = function(genefile, metfile){
 humann2_format_contributions = function(path_to_humann_file, file_read = F){
   #Provide either file path or table itself
   if(!file_read) gene_contribs = fread(path_to_humann_file) else gene_contribs = path_to_humann_file
+  if(!"ID" %in% names(gene_contribs) & any(grepl("Abundance-RPKs", names(gene_contribs)))){
+    stop("Error: expected a Humann2-stratified file but ID column is missing and/or column names are formatted differently. Did you select the correct file format?")
+  }
   setnames(gene_contribs, c("ID", gsub("_Abundance-RPKs", "", names(gene_contribs)[2:ncol(gene_contribs)])))
   setnames(gene_contribs, gsub("-", "_", names(gene_contribs)))
   gene_contribs[,Taxon:=gsub(".*\\|", "", ID)]

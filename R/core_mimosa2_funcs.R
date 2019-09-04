@@ -664,7 +664,7 @@ run_samp_shapley_analysis = function(species_cmps, mets_melt, config_table, nper
 #' rank_based_rsq_contribs(species_cmps, mets_melt, config_table)
 #' @export
 rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mods = NULL, adj_rsq = F, nperm_start = 0, nperm_taxa = 5, signif_threshold = 0.1, return_perm = F, 
-                                  add_residual = F, nperm_max = 200){ #Shapley contribs without re-evaluating the model every time
+                                  add_residual = F, nperm_max = 300){ #Shapley contribs without re-evaluating the model every time
   #Fit model if not provided
   if(is.null(cmp_mods)){
     cmp_mods = fit_cmp_mods(species_cmps, mets_melt, rank_based = T, rank_type = "rfit")
@@ -722,6 +722,14 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
     #   cumulMetVarTemplate[,(spec_list[m]):=0]
     #   cumulMetVarTemplateMarg[,(spec_list[m]):=0]
     # }
+    mod_fit_true[,NSpec:=sapply(compound, function(x){
+      species_cmps[compound==x & CMP != 0, length(unique(Species))]
+    })]
+    mod_fit_true[,NCombo:=factorial(NSpec)]
+    mod_fit_true[,NPerm:=ifelse(NCombo < nperm_taxa*NSpec, NCombo, nperm_taxa*NSpec)]
+    mod_fit_true[NPerm > nperm_max, NPerm:=nperm_max]
+    mod_fit_true[,AllPerm:=ifelse(NPerm==NCombo, T, F)]
+
     allContribs_mean_all = data.table()
     for(k in 1:length(comp_list)){
       cmps1 = species_cmps[compound == comp_list[k]]
@@ -736,19 +744,21 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
         allContribs = data.table(compound = comp_list[k])
         allContribs[, (new_spec_list):= true_rsq]
       } else {
-        if(factorial(nspec) < nperm_taxa*nspec & factorial(nspec) < nperm_max){
-          cat("Calculating contributions across all possible subsets\n")
-          nperm = factorial(nspec)
-          all_perm = T
-        } else if(nperm_start == 0){ #Can specify either a hard number of random orderings or as a function of the number of taxa
-          nperm = nperm_taxa*nspec
-          all_perm = F
-        }
-        if(nperm > nperm_max){
-          cat("Recommended number of permutations exceeds maximum\n")
-          nperm = nperm_max
-          all_perm = F
-        }
+        nperm  = mod_fit_true[compound == comp_list[k], NPerm]
+        all_perm = mod_fit_true[compound == comp_list[k], AllPerm]
+        # if(factorial(nspec) < nperm_taxa*nspec & factorial(nspec) < nperm_max){
+        #   cat("Calculating contributions across all possible subsets\n")
+        #   nperm = factorial(nspec)
+        #   all_perm = T
+        # } else if(nperm_start == 0){ #Can specify either a hard number of random orderings or as a function of the number of taxa
+        #   nperm = nperm_taxa*nspec
+        #   all_perm = F
+        # }
+        # if(nperm > nperm_max){
+        #   cat("Recommended number of permutations exceeds maximum\n")
+        #   nperm = nperm_max
+        #   all_perm = F
+        # }
         cat("Running ", nperm, " permutations for metabolite ", comp_list[k], "\n")
         if(all_perm){
           R1 = t(gtools::permutations(nspec, nspec))
@@ -879,11 +889,12 @@ getPalette = colorRampPalette(brewer.pal(12, "Paired"))
 #' @param spec_threshold Threshold number of minimum contributing species for merging into "other" to be applied
 #' @param color_palette Color palette to use for taxa in plot
 #' @param order_spec Whether to sort species by contribution size
+#' @param taxa_max If this compound has more than this many contributing taxa, only this number will be plotted
 #' @return plot of contributions
 #' @examples
 #' plot_contributions(varShares)
 #' @export
-plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F, include_residual = F, merge_threshold = 0.02, spec_threshold = 10, color_palette = NULL, order_spec = T){
+plot_contributions = function(varShares, metabolite, metIDcol = "metID", include_zeros = F, include_residual = F, merge_threshold = 0.02, spec_threshold = 10, color_palette = NULL, order_spec = T, taxa_max = 15){
   plot_dat = varShares[get(metIDcol)==metabolite]
   if(nrow(plot_dat)==0){
     warning(paste0("No taxonomic contribution data for ", metabolite, "\n"))
@@ -898,6 +909,10 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
       plot_dat = plot_dat[,sum(VarShare), by=Species]
       setnames(plot_dat, "V1", "VarShare")
     }
+  }
+  if(plot_dat[,length(unique(Species))] > taxa_max){ #If there are too many taxa, just leave some out
+    top_spec = plot_dat[Species != "Other"][order(abs(VarShare), decreasing = T)][1:15, Species]
+    plot_dat = plot_dat[Species %in% top_spec]
   }
   if(is.null(color_palette)) {
     color_pals = c( "black", "gray", sample(getPalette(plot_dat[,length(unique(Species))-2])))
@@ -1018,7 +1033,7 @@ cmp_met_plot = function(cmp_table, met_table, mod_results = NULL, sample_col = "
     m_compare_mets[,annotResult:=round(Rsq, 3)] 
     m_compare_mets[,M2Signif:=ifelse(PVal < 0.01, T, F)]
   }
-  if(is.null(met_title)) met_title = m_compare_mets[,unique(compound)]
+  if(is.null(met_title)|is.na(met_title)) met_title = m_compare_mets[,unique(compound)]
   
   met_plot = ggplot(m_compare_mets, aes(x=CMP, y = Met)) + theme_cowplot() + 
     theme(axis.text = element_text(size = 4), axis.title = element_text(size = 9), plot.title = element_text(face = "plain", size = 9))  + 
@@ -1026,10 +1041,10 @@ cmp_met_plot = function(cmp_table, met_table, mod_results = NULL, sample_col = "
   if(is.null(mod_results)){
     met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2)
   } else {
-    met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2, color = ifelse(m_compare_mets[1,M2Signif], "darkred", "darkblue")) + 
+    met_plot = met_plot + geom_point(alpha = 0.6, size = 1.2) + 
       geom_abline(slope = mod_results[,Slope], intercept = mod_results[,Intercept], linetype = 2, alpha = 0.6, color = "black") +
       annotate(geom = "text", label = m_compare_mets[1,annotResult], x = Inf, y = Inf, hjust = 1, vjust = 1, size = 2.5, fontface = "bold") 
-  }
+  } #, color = ifelse(m_compare_mets[1,M2Signif], "darkred", "darkblue"
   return(met_plot)
 }
 

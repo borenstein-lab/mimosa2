@@ -7,7 +7,7 @@
 rank_based_rsq_contribs(species_cmps, mets_melt, config_table,
   cmp_mods = NULL, adj_rsq = F, nperm_start = 0, nperm_taxa = 5,
   signif_threshold = 0.1, return_perm = F, add_residual = F,
-  nperm_max = 200)
+  nperm_max = 300)
 }
 \arguments{
 \item{species_cmps}{Table of species contributions (without residuals)}

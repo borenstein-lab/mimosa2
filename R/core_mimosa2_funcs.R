@@ -1933,7 +1933,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       if(!humann2_param){
         spec_dat = melt(species, id.var = "OTU", variable.name = "Sample")[,list(value/sum(value), OTU), by=Sample] #convert to relative abundance
         bad_spec = spec_dat[,list(length(V1[V1 != 0])/length(V1), max(V1)), by=OTU]
-        bad_spec = bad_spec[V1 < 0.1 & V2 < 0.1, OTU] #Never higher than 10% and absent in at least 90% of samples
+        bad_spec = bad_spec[V1 < 0.2 & V2 < 0.1, OTU] #Never higher than 10% and absent in at least 90% of samples
       } else bad_spec = NULL
       if("signifThreshold" %in% config_table[,V1]){
         signifThreshold = config_table[V1 == "signifThreshold", as.numeric(V2)]

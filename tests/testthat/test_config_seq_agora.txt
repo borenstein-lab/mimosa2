@@ -8,3 +8,4 @@ simThreshold	0.95
 data_prefix	~/Documents/MIMOSA2shiny/data/
 vsearch_path	~/Documents/MIMOSA2shiny/bin/vsearch
 metType	KEGG Compound IDs
+signifThreshold	1

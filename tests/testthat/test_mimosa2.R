@@ -15,7 +15,7 @@ test_config_file2 = "../../../MIMOSA2shiny/data/exampleData/configs_example_clea
 # config1 = rbind(config1, data.table(V1 = "metType", V2 = get_text("met_type_choices")[1]))
 # write.table(config1, file = test_config_file1, row.names = F, col.names = F, quote=F, sep = "\t")
 # 
-test_results_normal = function(config_table, file_prefix){
+test_results_normal = function(config_table, file_prefix, make_plots = F){
   expect_silent(check_config_table(config_table))
   config_table = check_config_table(config_table)
   file_list = as.list(config_table[grepl("file", V1, ignore.case = T), V2])
@@ -68,11 +68,14 @@ test_results_normal = function(config_table, file_prefix){
     expect_equal(get_compound_format(mets[,compound]), "KEGG")
   }
 
+  #Get CMP scores
   if("rxnEdit" %in% config_table[,V1]){
     rxn_param = T
+    cat("Will refine reaction network\n")
   } else rxn_param = F
   if("rankBased" %in% config_table[,V1]){
     rank_based = T
+    cat("Will use rank-based/robust regression\n")
     if("rank_type" %in% config_table[,V1]){
       rank_type = config_table[V1=="rank_type", V2]
     } else {
@@ -83,7 +86,7 @@ test_results_normal = function(config_table, file_prefix){
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     no_spec_param = T
     humann2_param = F
-  } else if(config_table[V1=="database", V2==get_text("database_choices")[5]] ){
+  } else if(config_table[V1=="database", V2==get_text("database_choices")[5]]){
     no_spec_param = F
     humann2_param = T
   } else {
@@ -96,19 +99,33 @@ test_results_normal = function(config_table, file_prefix){
   } else {
     agora_param = F
   }
-  if(identical(config_table[V1=="compare_only", V2], TRUE)){
-    compare_only = T
-  } else compare_only = F
+  # if("revRxns" %in% config_table[,V1]){ #Whether to add reverse of reversible-annotated rxns - mainly for agora networks
+  #   network = add_rev_rxns(network, sameID = T) # Give reverse the same rxn ID
+  #   cat("Will add reverse of reversible reactions\n")
+  # }
+  # if("refine" %in% config_table[,V1]){
+  #   network = refine_rev_rxns(network, )
+  # }
   if("met_transform" %in% config_table[,V1]){
     met_transform = config_table[V1=="met_transform", V2]
+    cat(paste0("Will transform metabolite values, transform is ", met_transform))
   } else met_transform = ""
+  if("score_transform" %in% config_table[,V1]){
+    score_transform = config_table[V1=="score_transform", V2]
+    cat(paste0("Will transform CMP values, transform is ", score_transform))
+  } else score_transform = ""
+  
+  if(config_table[V1=="compare_only", V2==T]){
+    compare_only = T
+  } else {
+    compare_only = F
+  }
   
   #indiv_cmps = get_cmp_scores_kos(species, network) #Use KO abundances instead of species abundances to get cmps
   mets_melt = melt(mets, id.var = "compound", variable.name = "Sample")
   if(met_transform != ""){
     mets_melt = transform_mets(mets_melt, met_transform)
   }
-  
   if(rxn_param){
     cmp_mods =  fit_cmp_net_edit(network, species, mets_melt, manual_agora = agora_param, rank_based = rank_based)
     network = cmp_mods[[3]] #Revised network
@@ -116,9 +133,13 @@ test_results_normal = function(config_table, file_prefix){
     #Will have to report nice summary of rxns removed, rxns direction switched, etc
   } else {
     indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param)
+    if(score_transform != ""){
+      indiv_cmps = transform_cmps(indiv_cmps, score_transform)
+    }
     indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
     cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
   }
+  
   expect_gt(nrow(indiv_cmps), 0)
   print(head(indiv_cmps))
   expect_setequal(names(indiv_cmps), c("Species", "Sample","compound", "CMP")) #, "NumSynthGenes", "NumSynthSpecies","NumSynthSpecGenes", "NumDegGenes","NumDegSpecies","NumDegSpecGenes"))
@@ -135,11 +156,22 @@ test_results_normal = function(config_table, file_prefix){
   expect_equal(nrow(cmp_mods[[1]])*indiv_cmps[,length(unique(Sample))], nrow(cmp_mods[[2]]))
   expect_true(cmp_mods[[2]][,all(is.numeric(Resid))])
   expect_equal(nrow(cmp_mods[[2]][is.na(Resid)]), 0)
+  
   if(!compare_only & !no_spec_param){ #Option to skip contributions
-    var_shares = calculate_var_shares(indiv_cmps, model_results = cmp_mods, met_table = mets_melt, config_table = config_table, signif_threshold = 0.2)
-    if(is.null(var_shares)){
-      config_table[V1=="compare_only", V2:= TRUE]
+    if(!humann2_param){
+      spec_dat = melt(species, id.var = "OTU", variable.name = "Sample")[,list(value/sum(value), OTU), by=Sample] #convert to relative abundance
+      bad_spec = spec_dat[,list(length(V1[V1 != 0])/length(V1), max(V1)), by=OTU]
+      bad_spec = bad_spec[V1 < 0.1 & V2 < 0.1, OTU] #Never higher than 10% and absent in at least 90% of samples
+      print(bad_spec)
+    } else bad_spec = NULL
+    if("signifThreshold" %in% config_table[,V1]){
+      signifThreshold = config_table[V1 == "signifThreshold", as.numeric(V2)]
+    } else {
+      signifThreshold = 0.2
     }
+    time1 = Sys.time()
+    var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table, species_merge = bad_spec, signif_threshold = signifThreshold)
+    cat(paste0("Contribution calculation time: ", Sys.time() - time1, "\n"))
   } else {
     var_shares = NULL
   }
@@ -148,33 +180,57 @@ test_results_normal = function(config_table, file_prefix){
                                  humann2 = humann2_param, met_subset = mets[,compound], contrib_sizes = var_shares)
   expect_gt(nrow(summary_cmps$CompLevelSummary), 0)
   cmp_mods[[1]] = merge(cmp_mods[[1]], summary_cmps$CompLevelSummary, by = "compound", all.x = T)
+  #Add species/rxn info
   
-  #shinyjs::logjs(devtools::session_info())
-  #Order dataset for plotting
-  print(indiv_cmps[compound %in% mets_melt[,compound]])
-  CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])
-  
-  if(!config_table[V1 == "compare_only", identical(V2, "TRUE")]){
-    comp_list = var_shares[!is.na(VarShare), unique(as.character(compound))]
-    comp_list = comp_list[!comp_list %in% var_shares[Species == "Residual" & VarShare == 1, as.character(compound)]]
-    all_contrib_taxa = var_shares[compound %in% comp_list & !is.na(VarShare) & abs(VarShare) >= 0.03 & Species != "Residual", as.character(unique(Species))]
-    getPalette = colorRampPalette(brewer.pal(12, "Paired"))
-    contrib_color_palette = c("black", "gray", getPalette(length(all_contrib_taxa)))
-    names(contrib_color_palette) = c("Residual", "Other", all_contrib_taxa)
-    print("Color palette")
-    print(contrib_color_palette)
+  if(length(summary_cmps) > 1) var_shares = merge(var_shares, summary_cmps$SpeciesLevelSummary, by = c("compound", "Species"), all.x = T)
+  cmp_mods[[1]][,compound:=as.character(compound)]
+  indiv_cmps[,compound:=as.character(compound)]
+  if(!is.null(var_shares)){
+    var_shares[,compound:=as.character(compound)]
+    var_shares[,Species:=as.character(Species)]
     var_shares[,MetaboliteName:=met_names(as.character(compound))]
     var_shares[is.na(MetaboliteName), MetaboliteName:=compound]
-    met_contrib_plots = lapply(comp_list, function(x){
-      print(x)
-      if(is.na(met_names(x))){
-        met_id = x
-      } else { met_id = met_names(x)}
-      plot_contributions(var_shares, met_id, metIDcol = "MetaboliteName", color_palette = contrib_color_palette, include_residual = F, merge_threshold = 0.01)
-    })
-  } else {
-    met_contrib_plots = NULL
+    var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
   }
+  if(make_plots){
+    CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])
+    
+    if(!compare_only){
+      comp_list = var_shares[!is.na(VarShare), unique(as.character(compound))]
+      comp_list = comp_list[!comp_list %in% var_shares[Species == "Residual" & VarShare == 1, as.character(compound)]]
+      all_contrib_taxa = var_shares[compound %in% comp_list & !is.na(VarShare) & Species != "Residual", as.character(unique(Species))]
+      getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+      if(var_shares[compound %in% comp_list & Species != "Residual", length(unique(Species[VarShare != 0])), by=compound][,any(V1 > 10)]){
+        contrib_color_palette = c("gray", getPalette(length(all_contrib_taxa))) #"black",  #Work with plotting function filters
+        names(contrib_color_palette) = c( "Other", all_contrib_taxa) #"Residual",
+      } else {
+        contrib_color_palette = getPalette(length(all_contrib_taxa)) #"black", 
+        names(contrib_color_palette) = all_contrib_taxa #"Residual",
+      }
+      met_contrib_plots = lapply(comp_list, function(x){
+        print(x)
+        if(is.na(met_names(x))){
+          met_id = x
+        } else { met_id = met_names(x)}
+        plot_contributions(var_shares, met_id, metIDcol = "MetaboliteName", color_palette = contrib_color_palette, include_residual = F, merge_threshold = 0.01)
+      })
+      #Contribution Legend
+      leg_dat = data.table(V1 = factor(names(contrib_color_palette), levels = c(all_contrib_taxa, "Other"))) #, "Residual"
+      setnames(leg_dat, "V1", "Contributing Taxa")
+      print(leg_dat)
+      legend_plot = ggplot(leg_dat, aes(fill = `Contributing Taxa`, x=`Contributing Taxa`)) + geom_bar() + scale_fill_manual(values = contrib_color_palette, name = "Contributing Taxa")# + theme(legend.text = element_text(size = 10))
+      contrib_legend = tryCatch(get_legend(legend_plot), error = function(){ return(NULL)}) 
+    } else {
+      met_contrib_plots = NULL
+      contrib_legend = NULL
+    }
+  }
+  if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
+    network[,KEGGReac:=agora_kegg_mets(Reac)]
+    network[,KEGGProd:=agora_kegg_mets(Prod)]
+  } 
+  analysis_summary = get_analysis_summary(input_species = data_inputs[[1]], species = species, mets = mets, network = network, indiv_cmps = indiv_cmps, cmp_mods = cmp_mods, var_shares = var_shares, config_table = config_table)
+  
   #Write a test that the contributinos add up to the R-squared
   if(!is.null(var_shares)){
     contribs_all = var_shares[Species != "Residual",sum(VarShare), by=list(compound, Rsq)]
@@ -368,3 +424,12 @@ test_that("Metagenome stratified option works", {
   
 })
 
+test_that("Rank contribution timing", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1", V2:="test_gg.txt"]
+  config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
+  config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
+  foo = run_mimosa2(config1)
+})

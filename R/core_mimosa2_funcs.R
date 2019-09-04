@@ -729,6 +729,7 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
       cat(nspec, "taxa for compound", comp_list[k], "\n")
       null_disp_comp = mod_fit_true[compound == comp_list[k], NullDisp]
       true_rsq = mod_fit_true[compound == comp_list[k], TrueRsq]
+      met_vals = mets_melt[compound==comp_list[k]][order(Sample),value]
       if(nspec==1){
         allContribs = data.table(compound = comp_list[k])
         allContribs[, (new_spec_list):= true_rsq]
@@ -766,7 +767,8 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
           spec_order = R1[,perm_id]
           for(j in 1:nspec){
             if(j < nspec){
-              perm_dat = cmps1[!Species %in% new_spec_list[spec_order[1:j]]]
+              #we are removing species spec_order[j] at each iteration
+              cmps1 = cmps1[Species != new_spec_list[spec_order[j]]]
               #Skip compounds where this species changes nothing - automatically 0
               #zero_comps = cmps1[Species == spec_list[spec_order[j]], length(CMP[CMP != 0]), by=compound][V1==0, compound]
               #perm_dat = perm_dat[!compound %in% zero_comps]
@@ -774,8 +776,8 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
               #fit model under permutation
               #Calculate new disp
               
-              tot_pred = perm_dat[,sum(PredVal), by=list(Sample, value)]
-              new_disp = tot_pred[,j.disp.fit(V1, value)] #, by=compound]
+              tot_pred = cmps1[,sum(PredVal), by=Sample]$V1
+              new_disp = j.disp.fit(tot_pred, met_vals) #, by=compound]
               #cumulMetVars = merge(cumulMetVars, new_disp, by = "compound", all.x = T)
               if(!adj_rsq){
                 cumulMetVars[spec_order[j]] = (1-new_disp/null_disp_comp)
@@ -1306,7 +1308,11 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
     network = get_non_rev_rxns(network, by_species == F)
   } else {
-    network = get_non_rev_rxns(network, all_rxns = T, by_species = T)
+    if("Rev" %in% names(network)){ #Already have rev info (agora and embl)
+      setnames(network, "Rev", "Reversible")
+    } else {
+      network = get_non_rev_rxns(network, all_rxns = T, by_species = T)
+    }
   }
   return(list(network, species))
 }

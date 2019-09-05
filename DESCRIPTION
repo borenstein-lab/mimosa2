@@ -9,6 +9,14 @@ License: What license is it under?
 Encoding: UTF-8
 LazyData: true
 Imports:
+    Biostrings,
+    MetaboAnalystR,
+    R.matlab,
+    RColorBrewer,
+    Rfit,
+    cowplot,
+    data.table,
+    devtools,
     data.table,
     vegan,
     RColorBrewer,
@@ -16,11 +24,10 @@ Imports:
     qvalue,
     reshape2,
     permute,
-    devtools,
     Rcpp,
-    rBLAST,
-    Biostrings,
-    R.matlab
+    ggplot2,
+    ggnetwork,
+    network
 Suggests:
     KEGGREST,
     readr,

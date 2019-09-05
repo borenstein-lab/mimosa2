@@ -1998,7 +1998,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       network[,KEGGReac:=agora_kegg_mets(Reac)]
       network[,KEGGProd:=agora_kegg_mets(Prod)]
     } 
-    analysis_summary = get_analysis_summary(input_species = data_inputs[[1]], species = species, mets = mets, network = network, indiv_cmps = indiv_cmps, cmp_mods = cmp_mods, var_shares = var_shares, config_table = config_table)
+    analysis_summary = get_analysis_summary(input_species = data_inputs[[1]], species = species, mets = mets, network = network, indiv_cmps = indiv_cmps, cmp_mods = cmp_mods, var_shares = var_shares, config_table = config_table, pval_threshold = signifThreshold)
     if(save_plots & make_plots){
       #Save plots
       if(!dir.exists("mimosa2plots")){

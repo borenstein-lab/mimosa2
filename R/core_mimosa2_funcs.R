@@ -1334,7 +1334,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
   network = filter_currency_metabolites(network, degree_filter = degree_filt)
   #Get reversible status
   if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
-    network = get_non_rev_rxns(network, by_species == F)
+    network = get_non_rev_rxns(network, all_rxns = T, by_species = F)
   } else {
     if("Rev" %in% names(network)){ #Already have rev info (agora and embl)
       setnames(network, "Rev", "Reversible")
@@ -1900,6 +1900,11 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     if("met_transform" %in% config_table[,V1]){
       met_transform = config_table[V1=="met_transform", V2]
       cat(paste0("Will transform metabolite values, transform is ", met_transform))
+    } else if("logTransform" %in% config_table[,V1]){
+      if(config_table[V1=="logTransform", V2==T]){
+        met_transform = "logplus"
+        cat(paste0("Will transform metabolite values, transform is logplus"))
+      } else met_transform = ""
     } else met_transform = ""
     if("score_transform" %in% config_table[,V1]){
       score_transform = config_table[V1=="score_transform", V2]

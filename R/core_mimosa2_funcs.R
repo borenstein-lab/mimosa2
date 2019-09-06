@@ -693,9 +693,10 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
   }
   #Fill in 0s
   #Only if doing all compounds at once
-  species_cmps = melt(dcast(species_cmps, compound+Sample~Species, value.var = "CMP", fill = 0), id.vars = c("compound", "Sample"), variable.name = "Species", value.name = "CMP")
+  species_cmps = melt(dcast(species_cmps, compound+Species~Sample, value.var = "CMP", fill = 0), id.vars = c("compound", "Species"), variable.name = "Sample", value.name = "CMP")
   #Get predictions from full model
   species_cmps[,Species:=as.character(Species)]
+  species_cmps[,Sample:=as.character(Sample)]
   species_cmps = merge(species_cmps, cmp_mods[[1]][,list(compound, Intercept, Slope)], by = "compound", all.x = T)
   species_cmps[,PredVal:=CMP*Slope] #+Intercept]
   species_cmps = merge(species_cmps, mets_melt, by = c("compound", "Sample"), all.x = T)
@@ -734,6 +735,7 @@ rank_based_rsq_contribs = function(species_cmps, mets_melt, config_table, cmp_mo
     for(k in 1:length(comp_list)){
       cmps1 = species_cmps[compound == comp_list[k]]
       new_spec_list = spec_list[spec_list %in% cmps1[CMP != 0, Species]]
+      cmps1 = cmps1[Species %in% new_spec_list]
       nspec = length(new_spec_list)
       cmps1a = as.matrix(dcast(cmps1, Sample~Species, value.var = "PredVal")[,2:(nspec+1)])
       cat(nspec, "taxa for compound", comp_list[k], "\n")
@@ -1503,7 +1505,7 @@ get_cmp_summary = function(species_table, network, normalize = T, relAbund = T, 
     spec_rxn_cmps[,VarShare:=NA] #use same ordering code either way
   }
   if(!kos_only){
-    spec_rxn_summary = spec_rxn_cmps[Species != "Residual" & !is.na(SpecRxn)][order(VarShare, decreasing = T),list(length(unique(KO[CMP > 0])), length(unique(Species[CMP > 0])), length(unique(SpecRxn[CMP > 0])), 
+    spec_rxn_summary = spec_rxn_cmps[Species != "Residual" & !is.na(SpecRxn)][order(abs(VarShare), decreasing = T),list(length(unique(KO[CMP > 0])), length(unique(Species[CMP > 0])), length(unique(SpecRxn[CMP > 0])), 
                                            length(unique(KO[CMP < 0])), length(unique(Species[CMP < 0])), length(unique(SpecRxn[CMP < 0])), 
                                            paste0(unique(KO[CMP > 0]), collapse = " "), paste0(unique(Species[CMP > 0]), collapse = " "), 
                                            paste0(unique(KO[CMP < 0]), collapse = " "), paste0(unique(Species[CMP < 0]), collapse = " "),

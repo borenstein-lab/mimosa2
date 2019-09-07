@@ -1794,7 +1794,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     missing_param = req_params[!req_params %in% config_table[,V1]]
     stop(paste0("Required parameters missing from configuration file: ", missing_param, "\n"))
   } 
-  all_params = c(req_params, "contribType", "metType", "netAdd", "simThreshold", "kegg_prefix", "vsearch_path", "compare_only") #Move to package sysdata?  "metagenome", "metagenome_format",
+  all_params = c(req_params,  "metType", "netAdd", "simThreshold", "kegg_prefix", "vsearch_path", "compare_only") #Move to package sysdata?  "metagenome", "metagenome_format",
   config_table[V2=="", V2:=FALSE]
   if(!"kegg_prefix" %in% config_table[,V1]){
     config_table = rbind(config_table, data.table(V1 = "kegg_prefix", V2 = paste0(config_table[V1=="data_prefix", V2], "/KEGGfiles/")))
@@ -1877,12 +1877,16 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
       no_spec_param = T
       humann2_param = F
+      rel_abund_param = T
     } else if(config_table[V1=="database", V2==get_text("database_choices")[5]]){
       no_spec_param = F
       humann2_param = T
+      rel_abund_param = F
+      cat("Humann2 format\n")
     } else {
       no_spec_param = F
       humann2_param = F
+      rel_abund_param = T
     }
     if("manualAGORA" %in% config_table[,V1]){
       agora_param = T
@@ -1928,7 +1932,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       indiv_cmps = cmp_mods[[4]]
       #Will have to report nice summary of rxns removed, rxns direction switched, etc
     } else {
-      indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param)
+      indiv_cmps = get_species_cmp_scores(species, network, normalize = !rxn_param, leave_rxns = rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param, relAbund = rel_abund_param)
       if(score_transform != ""){
         indiv_cmps = transform_cmps(indiv_cmps, score_transform)
       }

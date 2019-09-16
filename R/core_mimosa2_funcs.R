@@ -89,13 +89,13 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "Rf
 #' get_analysis_summary(input_species, species, mets, network, cmps, mod_results, contributions, config_table)
 get_analysis_summary = function(input_species, species, mets, network, indiv_cmps, cmp_mods, var_shares, config_table, pval_threshold = 0.1){
   #Sample size
-  if(identical(config_table[V1=="database", V2], get_text("database_choices")[5])){
+  if(identical(config_table[V1=="file1_type", V2], get_text("database_choices")[5])){
     sample_size = length(intersect(species[,unique(Sample)], names(mets)))
   } else {
     sample_size = length(intersect(names(species), names(mets)))
   }
   #1 get number of species mapped
-  if(identical(config_table[V1=="database", V2], get_text("database_choices")[5])){
+  if(identical(config_table[V1=="file1_type", V2], get_text("database_choices")[5])){
     species_mapped = species[,length(unique(OTU))]
     species_orig = input_species[,length(unique(OTU))]
   } else {
@@ -956,7 +956,7 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
 #' @examples
 #' plot_summary_contributions(varShares)
 #' @export
-plot_summary_contributions = function(varShares, include_zeros = T, remove_resid_rescale = F, met_id_col = "metID"){
+plot_summary_contributions = function(varShares, include_zeros = T, remove_resid_rescale = F, met_id_col = "metID", include_rsq = T){
   if(!include_zeros){
     varShares = varShares[VarShare != 0]
     bad_mets = varShares[Species != "Residual",all(is.na(VarShare)), by=compound][V1==T, compound]
@@ -971,15 +971,21 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
   }
   #Deal with IDs not in the naming database (should probably update this as well at some point)
   #Order metabolites
-  met_order = varShares[Species=="Residual" & !is.na(VarShare) & VarShare != 0][order(VarShare, decreasing = F), metID]
+  resid_dat = unique(varShares[,list(metID, Rsq, PosNeg)])
+  met_order = resid_dat[order(Rsq, decreasing = F), metID]
   varShares = varShares[metID %in% met_order]
   varShares[,metID:=factor(metID, levels = met_order)]
   varShares[,PosNeg:=factor(ifelse(Slope > 0, "Positive", "Negative"), levels = c("Positive", "Negative"))]
   
-  resid_dat = varShares[Species == "Residual"]
+  if(include_rsq){
+    resid_plot = ggplot(resid_dat, aes(x=metID, y = Rsq)) + geom_bar(stat = "identity") + scale_y_continuous(expand = c(0,0))+ theme_minimal() +
+      theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared") +
+      facet_grid(~PosNeg, scales = "free_x", space = "free_x")
+  }
   varShares = varShares[Species != "Residual"]
   spec_order = varShares[,length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = F), Species]
   varShares[,Species2:=factor(as.character(Species), levels = spec_order)]
+
   if(remove_resid_rescale){
     varShares[,VarShareNoResid:=VarShare/sum(VarShare), by=metID]
     plot_var = "VarShareNoResid"
@@ -988,15 +994,16 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
     plot_var = "VarShare"
     color_lab = "Contribution to variance"
   }
-  resid_plot = ggplot(resid_dat, aes(x=metID, y = 1-VarShare)) + geom_bar(stat = "identity") + scale_y_continuous(expand = c(0,0))+ theme_minimal() +
-    theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared") +
-    facet_grid(~PosNeg, scales = "free_x", space = "free_x")
   plot1 = ggplot(varShares, aes(x=metID, y = Species2)) + geom_tile(aes_string(fill = plot_var)) + theme_minimal() +
-    theme(axis.text.x = element_blank(), axis.line = element_blank(), legend.position = "bottom", legend.text = element_text(size = 7)) +
+    theme(axis.text.x = element_text(angle=90, hjust=1, vjust =0.5), axis.line = element_blank(), legend.position = "bottom", legend.text = element_text(size = 7)) +
     scale_fill_gradient2(low = brewer.pal(9,"Reds")[9], mid = "white",  high = brewer.pal(9, "Blues")[9], midpoint = 0, name = color_lab) +
       ylab("Taxon")+xlab("Metabolite") + facet_grid(~PosNeg, scales = "free_x", space = "free_x")
-  plot_all = plot_grid(resid_plot, plot1, nrow = 2, align = "v", axis = "lr", rel_heights = c(1, 2.5))
-  return(plot_all)
+  if(!include_rsq){
+    return(plot1)
+  } else {
+    plot_all = plot_grid(resid_plot, plot1 + theme(axis.text.x = element_blank()), nrow = 2, align = "v", axis = "lr", rel_heights = c(1, 2.5))
+    return(plot_all)
+  }
 }
 
 #' Plot CMP values vs metabolite concentrations for a single metabolite
@@ -1089,7 +1096,7 @@ plot_all_cmp_mets = function(cmp_table, met_table, mod_results){
 #' read_mimosa2_files(input_file_list, config_table)
 #' @export
 read_mimosa2_files = function(file_list, configTable, app = T){
-  if(configTable[V1=="database", !V2 %in% get_text("database_choices")[4:5]]){ #Not metagenome-only
+  if(configTable[V1=="file1_type", !V2 %in% get_text("database_choices")[4:5]]){ #Not metagenome-only
     if(app){
       if(!is.null(file_list[["file1"]]$datapath)){
         species = fread(file_list[["file1"]]$datapath, header = T)
@@ -1118,7 +1125,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     } else {
       species = fread(file_list[["file1"]], header = T)
     }
-    if(configTable[V1=="database", V2==get_text("database_choices")[5]]){ #stratified
+    if(configTable[V1=="file1_type", V2==get_text("database_choices")[5]]){ #stratified
         if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
            species = humann2_format_contributions(species, file_read = T)
         }
@@ -1135,7 +1142,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
       }
     }
   #Save option to use for everything else
-  humann2_metagenome = ifelse(configTable[V1=="database", V2==get_text("database_choices")[5]], T, F)
+  humann2_metagenome = ifelse(configTable[V1=="file1_type", V2==get_text("database_choices")[5]], T, F)
   #Read metabolites
   if(app) mets = fread(file_list[["file2"]]$datapath, header = T) else mets = fread(file_list[["file2"]], header = T)
   met_nonzero_filt = ifelse(configTable[V1=="metNzeroFilter", is.numeric(V2)], configTable[V1=="metNzeroFilter", V2], 5)
@@ -1144,7 +1151,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     shared_samps = intersect(names(mets), species[,unique(Sample)])
   }
   if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
-  spec_colname = ifelse(configTable[V1=="database", V2==get_text("database_choices")[4]], "KO", "OTU")
+  spec_colname = ifelse(configTable[V1=="file1_type", V2==get_text("database_choices")[4]], "KO", "OTU")
   if(humann2_metagenome == F ) species = species[,c(spec_colname, shared_samps), with=F] else {
     species = species[Sample %in% shared_samps]
   }
@@ -1152,7 +1159,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
   dat_list = list(species, mets)
   names(dat_list) = c("species", "mets")
   for(extraFile in c("netAddFile")){
-    #if(!(extraFile=="metagenome" & configTable[V1=="database", V2==get_text("database_choices")[4]])){ #SKip metagenome if already read in
+    #if(!(extraFile=="metagenome" & configTable[V1=="file1_type", V2==get_text("database_choices")[4]])){ #SKip metagenome if already read in
       if(extraFile %in% names(file_list)){
         if(!is.null(file_list[[extraFile]])){
           if(file_list[[extraFile]] != F){
@@ -1168,14 +1175,14 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     #   dat_list[[extraFile]] = species
     # }
   }
-  # if(configTable[V1=="database", V2 %in% get_text("database_choices")[4:5]]){ # TO do either check col name or ignore this option
-  #   if(configTable[V1=="database", V2==get_text("database_choices")[5]]){
+  # if(configTable[V1=="file1_type", V2 %in% get_text("database_choices")[4:5]]){ # TO do either check col name or ignore this option
+  #   if(configTable[V1=="file1_type", V2==get_text("database_choices")[5]]){
   #     if(!all(c("OTU", "Gene","Sample", "CountContributedByOTU") %in% names(species))){ #Assume it is picrust format or fix if not
   #       dat_list$metagenome = humann2_format_contributions(dat_list$metagenome, file_read = T)
   #     }
   #   }
   # }
-  # if("metagenome" %in% names(dat_list) & configTable[V1=="database", V2 != get_text("database_choices")[4]]){ #extra metagenome
+  # if("metagenome" %in% names(dat_list) & configTable[V1=="file1_type", V2 != get_text("database_choices")[4]]){ #extra metagenome
   #   metagenome_samps = ifelse(configTable[V1=="metagenome_format", V1==get_text("metagenome_options")[2]], dat_list$metagenome[,unique(Sample)], names(dat_list$metagenome))
   #   if(sum(shared_samps %in% metagenome_samps) < 3){
   #     warning("Metagenome sample IDs not compatible with species and metabolites, will be ignored")
@@ -1201,10 +1208,10 @@ read_mimosa2_files = function(file_list, configTable, app = T){
 build_metabolic_model = function(species, config_table, netAdd = NULL, manual_agora = F, degree_filt = 0){
   ### Get species to use for network if starting from seq vars
   if(!manual_agora){
-    if(config_table[V1=="database", V2==get_text("database_choices")[1]]){ ### Sequence variatns
+    if(config_table[V1=="file1_type", V2==get_text("database_choices")[1]]){ ### Sequence variatns
       seq_list = species[,OTU]
       if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
-      if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]) { ## Greengenes
+      if(config_table[V1=="ref_choices", V2==get_text("source_choices")[1]]) { ## Greengenes
         seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "/picrustGG/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch")) #Run vsearch to get gg OTUs
         species[,seqID:=paste0("seq", 1:nrow(species))]
         samps = names(species)[!names(species) %in% c("OTU", "seqID")]
@@ -1214,7 +1221,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         new_species[is.na(OTU), OTU:=0] #Unassigned
         species = new_species
         mod_list = species[,OTU]
-      } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ ## AGORA
+      } else if(config_table[V1=="ref_choices", V2==get_text("source_choices")[2]]){ ## AGORA
         seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "/AGORA/"), repSeqFile = "agora_NCBI_16S.udb", method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)], add_agora_names = T, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch"))
         species[,seqID:=paste0("seq", 1:nrow(species))]
         samps = names(species)[!names(species) %in% c("OTU", "seqID")]
@@ -1231,7 +1238,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         # }
         ### Convert species abundances to AGORA species IDs
 
-      }  else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ ## embl_gems
+      }  else if(config_table[V1=="ref_choices", V2==get_text("source_choices")[3]]){ ## embl_gems
         seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "/embl_gems/"), repSeqFile = "all_16S_seqs.udb",
                                  method = "vsearch", file_prefix = "seqtemp", seqID = config_table[V1=="simThreshold", as.numeric(V2)],
                                  add_agora_names = F, add_embl_names = T,
@@ -1245,12 +1252,12 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         mod_list = seq_results[,unique(ModelID)]
         species = new_species
       }else stop("Model source option not found")
-    } else if(config_table[V1=="database", V2==get_text("database_choices")[2]]){ ## GG OTUs
+    } else if(config_table[V1=="file1_type", V2==get_text("database_choices")[2]]){ ## GG OTUs
       #Nothing to do
-      if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
+      if(config_table[V1=="ref_choices", V2==get_text("source_choices")[1]]){ #KEGG
         mod_list = species[,OTU]
-      } else if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ ## AGORA or embl_gems
-        if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
+      } else if(config_table[V1=="ref_choices", V2 %in% get_text("source_choices")[2:3]]){ ## AGORA or embl_gems
+        if(config_table[V1=="ref_choices", V2 == get_text("source_choices")[2]]){
           cat("Mapping greengenes OTUs to AGORA...\n")
           species = otus_to_db(species, target_db = "AGORA", data_prefix = paste0(config_table[V1=="data_prefix", V2], "OTU_model_mapping_files/"))
           if(nrow(species[!is.na(OTU)]) == 0) stop("No OTUs mapped to reference models - did you select the correct reference format?")
@@ -1263,9 +1270,9 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         }
         mod_list = species[!is.na(OTU),OTU]
       } else stop('Model option not implemented')
-    } else if(config_table[V1=="database", V2==get_text("database_choices")[3]]){ # SILVA
-      if(config_table[V1=="genomeChoices", V2 %in% get_text("source_choices")[2:3]]){ # AGORA
-        if(config_table[V1=="genomeChoices", V2 == get_text("source_choices")[2]]){
+    } else if(config_table[V1=="file1_type", V2==get_text("database_choices")[3]]){ # SILVA
+      if(config_table[V1=="ref_choices", V2 %in% get_text("source_choices")[2:3]]){ # AGORA
+        if(config_table[V1=="ref_choices", V2 == get_text("source_choices")[2]]){
           species = otus_to_db(species, database = "SILVA", target_db = "AGORA", data_prefix = paste0(config_table[V1=="data_prefix", V2], "OTU_model_mapping_files/"))
         } else { #Embl_gems
           species = otus_to_db(species, database = "SILVA", target_db = "RefSeq", data_prefix = paste0(config_table[V1=="data_prefix", V2], "OTU_model_mapping_files/"))
@@ -1279,16 +1286,16 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
     #   stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
     # }
     ### Now build network from mod_list
-    if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[1]]){ #KEGG
-      if(config_table[V1=="database", !V2 %in% get_text("database_choices")[c(1, 2, 4, 5)]]){
+    if(config_table[V1=="ref_choices", V2==get_text("source_choices")[1]]){ #KEGG
+      if(config_table[V1=="file1_type", !V2 %in% get_text("database_choices")[c(1, 2, 4, 5)]]){
         stop("SILVA to KEGG not currently implemented")
       }
-      if(config_table[V1=="database", V2 %in% get_text("database_choices")[4:5]]){
-        if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
+      if(config_table[V1=="file1_type", V2 %in% get_text("database_choices")[4:5]]){
+        if(config_table[V1=="ref_choices", V2 != get_text("source_choices")[1]]){
           stop("This combination of taxa format and reaction source is not implemented. Please choose a different option.")
         }
         #Get network from metagenome KOs
-        if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+        if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
           species = species[rowSums(species[,names(species) != "KO", with=F]) != 0]
           network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
           network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
@@ -1306,12 +1313,12 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
       } else { ##database_choices 1 or 3
         network = get_kegg_network(mod_list, net_path = paste0(config_table[V1=="data_prefix", V2], "/picrustGG/RxnNetworks/"))
       }
-    } else if(config_table[V1=="genomeChoices", V2==get_text("source_choices")[2]]){ #AGORA
+    } else if(config_table[V1=="ref_choices", V2==get_text("source_choices")[2]]){ #AGORA
       network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "/AGORA/RxnNetworks/"))
-    } else if (config_table[V1=="genomeChoices", V2==get_text("source_choices")[3]]){ #embl_gems
+    } else if (config_table[V1=="ref_choices", V2==get_text("source_choices")[3]]){ #embl_gems
       network = build_species_networks_w_agora(mod_list, agora_path = paste0(config_table[V1=="data_prefix", V2], "/embl_gems/RxnNetworks/"))
     }else stop('Invalid model format specified')
-    if(!(config_table[V1=="database", V2==get_text("database_choices")[4]])){
+    if(!(config_table[V1=="file1_type", V2==get_text("database_choices")[4]])){
       #Anything other than generic KOs
       species = species[OTU %in% network[,OTU]]
     }
@@ -1330,10 +1337,10 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
   # if(config_table[V1=="gapfill", V2 != F]){
   #   #Do stuff
   # }
-  if(config_table[V1=="database", V2!=get_text("database_choices")[4]]) network = network[OTU %in% species[,OTU]]
+  if(config_table[V1=="file1_type", V2!=get_text("database_choices")[4]]) network = network[OTU %in% species[,OTU]]
   network = filter_currency_metabolites(network, degree_filter = degree_filt)
   #Get reversible status
-  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+  if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
     network = get_non_rev_rxns(network, all_rxns = T, by_species = F)
   } else {
     if("Rev" %in% names(network)){ #Already have rev info (agora and embl)
@@ -1783,10 +1790,10 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
 #' @export
 check_config_table = function(config_table, data_path = "data/", app = F){
   if(app){
-    req_params = c("database", "genomeChoices")
+    req_params = c("database", "ref_choices")
   } else {
-    req_params = c("file1", "file2", "database", "genomeChoices", "data_prefix")
-    # if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+    req_params = c("file1", "file2", "file1_type", "ref_choices", "data_prefix")
+    # if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
     #   req_params[req_params=="file1"] = "metagenome"
     # }
   }
@@ -1803,7 +1810,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     config_table = rbind(config_table, data.table(V1 = all_params[!all_params %in% config_table[,V1]], V2 = FALSE))
   }
   #if non-species metagenome is provided, set compare_only flag
-  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+  if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
     config_table[V1=="compare_only", V2:="TRUE"]    
   }
   return(config_table)
@@ -1846,7 +1853,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       network = network_results[[1]]
       species = network_results[[2]]
     }
-    # if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]){
+    # if(config_table[V1=="file1_type", !V2 %in% get_text("database_choices")[4:5]]){
     #   #If we are doing a comparison of the species network and the metagenome network
     #   #Metagenome data
     #   #Implement doing stuff with this later
@@ -1874,11 +1881,11 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       }
       cat(paste0("Regression type is ", rank_type, "\n"))
     } else rank_based = F
-    if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+    if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
       no_spec_param = T
       humann2_param = F
       rel_abund_param = T
-    } else if(config_table[V1=="database", V2==get_text("database_choices")[5]]){
+    } else if(config_table[V1=="file1_type", V2==get_text("database_choices")[5]]){
       no_spec_param = F
       humann2_param = T
       rel_abund_param = F
@@ -2005,7 +2012,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
         contrib_legend = NULL
       }
     }
-    if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
+    if(config_table[V1=="ref_choices", V2 != get_text("source_choices")[1]]){
       network[,KEGGReac:=agora_kegg_mets(Reac)]
       network[,KEGGProd:=agora_kegg_mets(Prod)]
     } 

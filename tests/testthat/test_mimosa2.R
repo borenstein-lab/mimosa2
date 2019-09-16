@@ -8,8 +8,8 @@ context("MIMOSA2 tests")
 test_config_file1 = "test_config_seq_agora.txt"
 test_config_file2 = "../../../MIMOSA2shiny/data/exampleData/configs_example_clean.txt"
 # config1 = fread(test_config_file1, header = F, fill = T)
-# config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
-# config1[V1=="database", V2:=get_text("database_choices")[1]]
+# config1[V1=="ref_choices", V2:=get_text("source_choices")[2]]
+# config1[V1=="file1_type", V2:=get_text("database_choices")[1]]
 # config1 = config1[!V1 %in% c("modelTemplate", "gapfill")]
 # config1 = rbind(config1, data.table(V1 = "vsearch_path", V2 = "~/Documents/MIMOSA2shiny/bin/vsearch"))
 # config1 = rbind(config1, data.table(V1 = "metType", V2 = get_text("met_type_choices")[1]))
@@ -27,11 +27,11 @@ test_results_normal = function(config_table, file_prefix, make_plots = F){
   mets = data_inputs$mets
   expect_gt(nrow(species), 0)
   expect_gt(nrow(mets), 0)
-  if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]) expect_true("OTU" %in% names(species))
+  if(config_table[V1=="file1_type", !V2 %in% get_text("database_choices")[4:5]]) expect_true("OTU" %in% names(species))
   expect_true("compound" %in% names(mets))
   if(config_table[V1=="metType", V2!=get_text("met_type_choices")[2]]) expect_equal(get_compound_format(mets[,compound]), "KEGG")
-  if(config_table[V1=="database", !V2 %in% get_text("database_choices")[4:5]]) expect_equal(nrow(species[is.na(OTU)]), 0) else {
-    if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+  if(config_table[V1=="file1_type", !V2 %in% get_text("database_choices")[4:5]]) expect_equal(nrow(species[is.na(OTU)]), 0) else {
+    if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
       expect_equal(nrow(species[is.na(KO)]), 0)
     } else {
       expect_equal(nrow(species[is.na(Gene)]), 0)
@@ -43,20 +43,20 @@ test_results_normal = function(config_table, file_prefix, make_plots = F){
   network_results = build_metabolic_model(species, config_table, netAdd = data_inputs$netAdd)
   network = network_results[[1]]
   species = network_results[[2]]
-  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_true("OTU" %in% names(species))
+  if(config_table[V1=="file1_type", V2 != get_text("database_choices")[4]]) expect_true("OTU" %in% names(species))
   expect_gt(nrow(species), 0)
-  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) {
+  if(config_table[V1=="file1_type", V2 != get_text("database_choices")[4]]) {
     expect_true(all(c("OTU", "KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(network)))
   } else {
     print(head(network))
     expect_true(all(c("KO", "Reac", "Prod", "stoichReac", "stoichProd") %in% names(network)))
   }
-  if(config_table[V1=="database", V2 == get_text("database_choices")[5]]) {
+  if(config_table[V1=="file1_type", V2 == get_text("database_choices")[5]]) {
     expect_true(all(c("Gene", "OTU", "CountContributedByOTU") %in% names(species)))
   }
-  if(config_table[V1=="database", V2 != get_text("database_choices")[4]]) expect_setequal(network[,unique(as.character(OTU))], species[,as.character(OTU)])
+  if(config_table[V1=="file1_type", V2 != get_text("database_choices")[4]]) expect_setequal(network[,unique(as.character(OTU))], species[,as.character(OTU)])
   expect_known_output(network, file = paste0(file_prefix, "_net.rda"))
-  # if(!is.null(data_inputs$metagenome) & config_table[V1=="database", V2!=get_text("database_choices")[4]]){
+  # if(!is.null(data_inputs$metagenome) & config_table[V1=="file1_type", V2!=get_text("database_choices")[4]]){
   #   metagenome_network = build_metabolic_model(data_inputs$metagenome, config_table, netAdd = data_inputs$netAdd)
   #   expect_equal(metagenome_network[,unique(OTU)], "TotalMetagenome")
   #   expect_true(all(c("KO", "Reac", "Prod", "stoichReac", "stoichProd", "normalized_copy_number") %in% names(metagenome_network)))
@@ -83,10 +83,10 @@ test_results_normal = function(config_table, file_prefix, make_plots = F){
     }
     cat(paste0("Regression type is ", rank_type, "\n"))
   } else rank_based = F
-  if(config_table[V1=="database", V2==get_text("database_choices")[4]]){
+  if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
     no_spec_param = T
     humann2_param = F
-  } else if(config_table[V1=="database", V2==get_text("database_choices")[5]]){
+  } else if(config_table[V1=="file1_type", V2==get_text("database_choices")[5]]){
     no_spec_param = F
     humann2_param = T
   } else {
@@ -225,7 +225,7 @@ test_results_normal = function(config_table, file_prefix, make_plots = F){
       contrib_legend = NULL
     }
   }
-  if(config_table[V1=="genomeChoices", V2 != get_text("source_choices")[1]]){
+  if(config_table[V1=="ref_choices", V2 != get_text("source_choices")[1]]){
     network[,KEGGReac:=agora_kegg_mets(Reac)]
     network[,KEGGProd:=agora_kegg_mets(Prod)]
   } 
@@ -264,7 +264,7 @@ test_that("Seq var -> AGORA species", {
 
 test_that("Seq var -> Greengenes OTUs, species-rxn KEGG mods", {
   config1 = fread(test_config_file1, header = F, fill = T)
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
   config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_seq_gg")
   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
@@ -273,8 +273,8 @@ test_that("Seq var -> Greengenes OTUs, species-rxn KEGG mods", {
 
 test_that("GG OTUs -> network", {
   config1 = fread(test_config_file1, header = F, fill = T)
-  config1[V1=="database", V2:=get_text("database_choices")[2]]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[2]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
   config1[V1=="file1", V2:="test_gg.txt"]
   config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_otus_gg")
@@ -286,8 +286,8 @@ test_that("GG OTUs -> network", {
 
 test_that("Greengenes OTUs -> AGORA species", {
   config1 = fread(test_config_file1, header = F, fill = T)
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
-  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[2]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[2]]
   config1[V1=="file1", V2:="test_gg.txt"]
   config1[V1=="netAdd", V2:="test_netAdd_species_rxns_AGORA.txt"]
   test_results_normal(config1, file_prefix = "gg_agora_addAgora")
@@ -328,8 +328,8 @@ test_that("Non-KEGG metabolites", {
 test_that("Species-gene modifications work, KEGG", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="file1", V2:="test_gg.txt"]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
-  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[2]]
   config1[V1=="netAdd", V2:="test_netAdd_species_genes_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_gg_addSpecGenes")
   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
@@ -340,8 +340,8 @@ test_that("Species-gene modifications work, KEGG", {
 test_that("Gene modifications work, KEGG", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="file1", V2:="test_gg.txt"]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
-  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[2]]
   config1[V1=="netAdd", V2:="test_netAdd_genes_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_gg_addGenes")
   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
@@ -352,8 +352,8 @@ test_that("Gene modifications work, KEGG", {
 test_that("Rxn modifications work, KEGG", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="file1", V2:="test_gg.txt"]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
-  config1[V1=="database", V2:=get_text("database_choices")[2]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[2]]
   config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
   test_results_normal(config1, file_prefix = "test_gg_addRxns")
 })
@@ -361,8 +361,8 @@ test_that("Rxn modifications work, KEGG", {
 test_that("Rxn modifications work, AGORA", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="file1", V2:="test_seqs.txt"]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
-  config1[V1=="database", V2:=get_text("database_choices")[1]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[2]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[1]]
   config1[V1=="netAdd", V2:="test_netAdd_rxns_AGORA.txt"]
   test_results_normal(config1, file_prefix = "test_agora_addRxns")
   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
@@ -373,8 +373,8 @@ test_that("Rxn modifications work, AGORA", {
 test_that("Gene modifications work, AGORA", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="file1", V2:="test_seqs.txt"]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
-  config1[V1=="database", V2:=get_text("database_choices")[1]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[2]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[1]]
   config1[V1=="netAdd", V2:="test_netAdd_genes_AGORA.txt"]
   test_results_normal(config1, file_prefix = "test_agora_addGenes")
   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
@@ -387,8 +387,8 @@ test_that("Gene modifications work, AGORA", {
 test_that("species-gene modifications work, AGORA", {
   config1 = fread(test_config_file1, header = F, fill = T)
   config1[V1=="file1", V2:="test_seqs.txt"]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[2]]
-  config1[V1=="database", V2:=get_text("database_choices")[1]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[2]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[1]]
   config1[V1=="netAdd", V2:="test_netAdd_species_genes_AGORA.txt"]
   test_results_normal(config1, file_prefix = "test_agora_addSpecGenes")
   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
@@ -399,8 +399,8 @@ test_that("species-gene modifications work, AGORA", {
 
 test_that("Metagenome option works", {
   config1 = fread(test_config_file1, header = F, fill = T)
-  config1[V1=="database", V2:=get_text("database_choices")[4]]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[4]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
   config1[V1 == "file1", V2:="test_metagenome.txt"]
   #config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_metagenome.txt", get_text("metagenome_options")[1])))
   config1[V1=="file2", V2:="test_metagenome_mets.txt"]
@@ -413,8 +413,8 @@ test_that("Metagenome option works", {
 
 test_that("Metagenome stratified option works", {
   config1 = fread(test_config_file1, header = F, fill = T)
-  config1[V1=="database", V2:=get_text("database_choices")[5]]
-  config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+  config1[V1=="file1_type", V2:=get_text("database_choices")[5]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
   config1[V1 == "file1", V2:="test_contributions.txt"]
   config1[V1=="file2", V2:="test_mets.txt"]
   config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
@@ -426,10 +426,49 @@ test_that("Metagenome stratified option works", {
 
 # test_that("Rank contribution timing", {
 #   config1 = fread(test_config_file1, header = F, fill = T)
-#   config1[V1=="database", V2:=get_text("database_choices")[2]]
-#   config1[V1=="genomeChoices", V2:=get_text("source_choices")[1]]
+#   config1[V1=="file1_type", V2:=get_text("database_choices")[2]]
+#   config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
 #   config1[V1=="file1", V2:="test_gg.txt"]
 #   config1[V1=="netAdd", V2:="test_netAdd_species_rxns_KEGG.txt"]
 #   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
 #   foo = run_mimosa2(config1)
 # })
+
+#testing results make sense after contribution updates
+# config1 = fread(test_config_file1, header = F, fill = T)
+# config1[V1=="file1_type", V2:=get_text("database_choices")[2]]
+# config1[V1=="ref_choices", V2:=get_text("source_choices")[2]]
+# config1[V1 == "file1", V2:="~/Documents/MIMOSA2shiny/data/testData/mimosa1data/Dataset2_otu_table.txt"]
+# config1[V1=="file2", V2:="~/Documents/MIMOSA2shiny/data/testData/mimosa1data/Dataset2_mets.txt"]
+# config1 = rbind(config1, data.table(V1 = "met_transform", V2 = "logplus"))
+# 
+# results1 = run_mimosa2(config1)
+# config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
+# results2 = run_mimosa2(config1)
+# 
+# example_varShares = fread("~/Documents/MIMOSA2shiny/data/exampleData/contributionResultsExample.txt")
+# 
+# varSharesCompare = merge(results1$varShares, results2$varShares,by=c("compound","MetaboliteName", "Species"))
+# cmpsCompare = merge(results1$CMPScores, results2$CMPScores, by = c("Species", "compound", "Sample"), all = T)
+# varSharesCompare[VarShare.x != 0 & Species != "Residual"]
+# varSharesCompare[VarShare.x != 0 & Species != "Residual",cor(VarShare.x, VarShare.y, method = "spearman")]# ok this seems pretty good
+# varSharesCompare[VarShare.x != 0 & Species != "Residual",cor(abs(VarShare.x), abs(VarShare.y), method = "spearman")]# ok this seems pretty good
+# varSharesCompare[VarShare.x != 0 & Species != "Residual" & Rsq.y > 0.01,cor(abs(VarShare.x), abs(VarShare.y), method = "spearman")]# ok this seems pretty good
+# varSharesCompare[VarShare.x != 0 & Species != "Residual" & Rsq.y > 0.01,cor(VarShare.x ,VarShare.y, method = "spearman")]# ok this seems pretty good
+# 
+# cmpsCompare[Species=="Peptoniphilus_lacrimalis_DSM_7455", summary(CMP.x)]
+# top_comps = varSharesCompare[Rsq.y > 0.1, unique(compound)]
+# good_spec = varSharesCompare[Rsq.y > 0.1 & (VarShare.x > 0.01|VarShare.y > 0.01), unique(Species)]
+# ggplot(cmpsCompare[compound %in% top_comps & Species %in% good_spec], aes(x=CMP.x, color = Species)) + geom_density() + facet_wrap(~compound, scales = "free")
+# 
+# ggplot(cmpsCompare[compound=="C00051"], aes(x=CMP.x, color = Species)) + geom_density() + facet_wrap(~compound, scales = "free")
+# varSharesCompare = varSharesCompare[Species != "Residual"]
+# varSharesCompare[compound=="C00051"][order(VarShare.x, decreasing = T)]
+# example_cmps = fread("~/Documents/MIMOSA2shiny/data/exampleData/CMPScoresExample.txt")
+# 
+# cmpsCompare = merge(cmpsCompare, example_cmps, by = c("Species", "Sample", "compound"), all = T) #Ok this is fine
+# cmpsCompare2 = cmpsCompare[,sum(CMP.y), by=list(Sample, compound, NewSpecies.y)]
+# setnames(cmpsCompare2, "NewSpecies.y", "Species")
+# ggplot(cmpsCompare2[compound=="C00051"], aes(x=Sample, y = V1, color=Species)) + geom_point()
+# 
+

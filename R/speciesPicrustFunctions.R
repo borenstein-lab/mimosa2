@@ -319,7 +319,7 @@ get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_
 
 #' Generate preprocessed reference databases for MIMOSA2
 #'
-#' @param database One of "KEGG", "PICRUSt_KEGG", "AGORA", or "embl_gems"
+#' @param database One of "KEGG", "picrustGG", "AGORA", or "embl_gems"
 #' @param model_table_file Optionally, a table listing models from a version of AGORA or embl_gems other than what is included in package data
 #' @param picrust_ko_path Path to unzipped precalculated PICRUSt 1 files
 #' @param kegg_paths Vector of file paths to the 3 KEGG files required for MIMOSA network template construction (1) reaction_mapformula.lst, 2) reaction_ko.list, and 3) reaction)
@@ -333,9 +333,9 @@ get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_
 #' generate_preprocessed_networks("AGORA", dat_path = "data/AGORA/", )
 generate_preprocessed_networks = function(database, model_table_file = NULL, picrust_ko_path = "data/picrustGenomeData/", 
                                                   kegg_paths = c("data/KEGGfiles/reaction_mapformula.lst", "data/KEGGfiles/reaction_ko.list", "data/KEGGfiles/reaction"),
-                                                  dat_path = paste0("data/", database, "/"), out_path = paste0("data/", database, "/processedModels/")
+                                                  dat_path = paste0("data/", database, "/"), out_path = paste0("data/", database, "/RxnNetworks/")
                                                   ){
-  if(grepl("KEGG", database)){ #anything kegg related
+  if(database %in% c("KEGG", "picrustGG")){ #anything kegg related
     #Get KEGG network template (same as MIMOSA1)
     if(length(list.files(path = out_path, pattern = "network_template.txt")) > 0){
       network_template = fread(paste0(out_path, "/network_template.txt"))
@@ -343,13 +343,13 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
       all_kegg = get_kegg_reaction_info(kegg_paths[2], reaction_info_file = kegg_paths[3], save_out = F)
       network_template = generate_network_template_kegg(kegg_paths[1], all_kegg = all_kegg, write_out = F) 
     }
-    if(database == "PICRUSt_KEGG"){
+    if(database == "picrustGG"){
       ## Get list of all OTUs
-      picrust_ko_table_directory = "data/picrustGenomeData/indivGenomes/"
+      picrust_ko_table_directory = picrust_ko_path
       picrust_ko_table_suffix = "_genomic_content.tab"
       all_otus = gsub(picrust_ko_table_suffix, "", list.files(picrust_ko_table_directory))
       
-      picrust_norm_file = "data/picrustGenomeData/16S_13_5_precalculated.tab"
+      picrust_norm_file = paste0(picrust_ko_path, "16S_13_5_precalculated.tab")
       #Get normalization data
       picrust_normalization_table = fread(picrust_norm_file, header = T)#fread(paste("gunzip -c ", picrust_norm_file, sep=""), header=T)
       colnames(picrust_normalization_table) = c("OTU", "norm_factor")
@@ -412,6 +412,41 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
     }
   }
 }
+
+#' Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables
+#'
+#' @import biomartr
+#' @param seq_db Microbiome data source type: must be one of "Sequence variants (ASVs)", "Greengenes 13_5 or 13_8 OTUs", or "SILVA 132 OTUs"  
+#' @param target_db Metabolic network source: must be one of "AGORA genomes and models" or "RefSeq/EMBL_GEMs genomes and models" (for KEGG models, see documentation)
+#' @param save_to File path to save the downloaded data. Default is a folder named "data/" in the current working directory
+#' @return None
+#' @examples
+#' download_reference_data("Sequence variants (ASVs)", "AGORA genomes and models")
+#' @export
+download_reference_data = function(seq_db = get_text("database_choices")[1], target_db = get_text("source_choices")[2], save_to = "data/"){
+  if(grepl("AGORA", target_db, ignore.case = T)){
+    target1 = "AGORA"
+  } else if(grepl("EMBL", target_db, ignore.case = T)){
+    target1 = "EMBL"
+  }
+  if(grepl("ASV", seq_db, ignore.case = T)){
+    source1 = "ASV"
+  } else if(grepl("OTU", seq_db, ignore.case = T)){
+    source1 = "OTU"
+  }
+  if(grepl("KEGG", target_db)){
+    stop("KEGG resources cannot be downloaded")
+  }
+  file_id = paste0(source1, "_", target1, ".tar.gz")
+  download1 = download.file(paste0("http://elbo-spice.gs.washington.edu/shiny/MIMOSA2shiny/refData/", file_id), destfile = file_id)
+  if(download1 != 0) stop("Download failed, please download manually") else {
+    cat("Data downloaded to ", getwd())
+  }
+  untar(file_id)
+  file.rename(from = paste0(source1, "_", target1, "/data/"), to = save_to)
+  cat("Set up the data directory, ready for mimosa2 analysis\n")
+}
+
 
 #' Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables
 #'

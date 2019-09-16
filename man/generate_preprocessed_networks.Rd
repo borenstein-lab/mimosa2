@@ -9,10 +9,10 @@ generate_preprocessed_networks(database, model_table_file = NULL,
   kegg_paths = c("data/KEGGfiles/reaction_mapformula.lst",
   "data/KEGGfiles/reaction_ko.list", "data/KEGGfiles/reaction"),
   dat_path = paste0("data/", database, "/"), out_path = paste0("data/",
-  database, "/processedModels/"))
+  database, "/RxnNetworks/"))
 }
 \arguments{
-\item{database}{One of "KEGG", "PICRUSt_KEGG", "AGORA", or "embl_gems"}
+\item{database}{One of "KEGG", "picrustGG", "AGORA", or "embl_gems"}
 
 \item{model_table_file}{Optionally, a table listing models from a version of AGORA or embl_gems other than what is included in package data}
 

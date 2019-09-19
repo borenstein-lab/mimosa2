@@ -1790,7 +1790,7 @@ add_to_network = function(network, addTable, target_format = NULL, source_format
 #' @export
 check_config_table = function(config_table, data_path = "data/", app = F){
   if(app){
-    req_params = c("database", "ref_choices")
+    req_params = c("file1_type", "ref_choices")
   } else {
     req_params = c("file1", "file2", "file1_type", "ref_choices", "data_prefix")
     # if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){

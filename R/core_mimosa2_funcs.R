@@ -971,11 +971,12 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
   }
   #Deal with IDs not in the naming database (should probably update this as well at some point)
   #Order metabolites
+  varShares[,PosNeg:=factor(ifelse(Slope > 0, "Positive", "Negative"), levels = c("Positive", "Negative"))]
   resid_dat = unique(varShares[,list(metID, Rsq, PosNeg)])
   met_order = resid_dat[order(Rsq, decreasing = F), metID]
   varShares = varShares[metID %in% met_order]
   varShares[,metID:=factor(metID, levels = met_order)]
-  varShares[,PosNeg:=factor(ifelse(Slope > 0, "Positive", "Negative"), levels = c("Positive", "Negative"))]
+  
   
   if(include_rsq){
     resid_plot = ggplot(resid_dat, aes(x=metID, y = Rsq)) + geom_bar(stat = "identity") + scale_y_continuous(expand = c(0,0))+ theme_minimal() +
@@ -1838,8 +1839,8 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       data_inputs = list(species = species, mets = mets)
     } else {
       config_table = check_config_table(config_table, app = F)
-      file_list = as.list(config_table[grepl("file", V1, ignore.case = T), V2])
-      names(file_list) = config_table[grepl("file", V1, ignore.case = T), V1]
+      file_list = as.list(config_table[V1 %in% c("file1", "file2", "netAddFile"), V2])
+      names(file_list) = config_table[V1 %in% c("file1", "file2", "netAddFile"), V1]
       data_inputs = read_mimosa2_files(file_list, config_table, app = F)
       species = data_inputs$species
       mets = data_inputs$mets

@@ -44,17 +44,23 @@ read_files = function(genefile, metfile){
 humann2_format_contributions = function(path_to_humann_file, file_read = F){
   #Provide either file path or table itself
   if(!file_read) gene_contribs = fread(path_to_humann_file) else gene_contribs = path_to_humann_file
-  if(!"ID" %in% names(gene_contribs) & any(grepl("Abundance-RPKs", names(gene_contribs)))){
-    stop("Error: expected a Humann2-stratified file but ID column is missing and/or column names are formatted differently. Did you select the correct file format?")
+  if(!("#OTU ID" %in% names(gene_contribs) & any(grepl("Abundance-RPKs", names(gene_contribs))))){
+    if("ID" %in% names(gene_contribs)){
+      warning("Warning: expected a Humann2-stratified file but ID column is missing and/or column names are formatted differently (no Abundance-RPKs tag). Will try to reformat anyway")
+    } else {
+      stop("Error: expected a Humann2-stratified file but ID column is missing and/or column names are formatted differently (no Abundance-RPKs tag). Did you select the correct file format?")
+    }
+  } else {
+    setnames(gene_contribs, c("ID", gsub("_Abundance-RPKs", "", names(gene_contribs)[2:ncol(gene_contribs)])))
+    setnames(gene_contribs, gsub("-", "_", names(gene_contribs)))
   }
-  setnames(gene_contribs, c("ID", gsub("_Abundance-RPKs", "", names(gene_contribs)[2:ncol(gene_contribs)])))
-  setnames(gene_contribs, gsub("-", "_", names(gene_contribs)))
   gene_contribs[,Taxon:=gsub(".*\\|", "", ID)]
   gene_contribs[,KO:=gsub("\\|.*", "", ID)]
   gene_contribs_good = melt(gene_contribs, id.vars = c("ID", "Taxon", "KO"), variable.name = "Sample")
   setnames(gene_contribs_good, c("Taxon", "KO", "value"), c("OTU", "Gene", "CountContributedByOTU"))
   gene_contribs_good[,ID:=NULL]
   gene_contribs_good = gene_contribs_good[OTU != Gene]
+  gene_contribs_good[,Sample:=as.character(Sample)]
   return(gene_contribs_good)
 }
 

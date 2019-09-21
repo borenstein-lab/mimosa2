@@ -1966,6 +1966,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       cat(paste0("Contribution calculation time: ", Sys.time() - time1, "\n"))
     } else {
       var_shares = NULL
+      signifThreshold = 0.05 #This is just for the summary in this case
     }
     #Rxns, taxa summary
     cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = F, kos_only = no_spec_param, humann2 = humann2_param, 

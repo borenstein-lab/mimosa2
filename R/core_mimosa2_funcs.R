@@ -1844,6 +1844,8 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       data_inputs = read_mimosa2_files(file_list, config_table, app = F)
       species = data_inputs$species
       mets = data_inputs$mets
+      if(nrow(species)==0) stop("Error reading microbiome file, no data found. Please check format is correct.")
+      if(nrow(mets)==0) stop("Error reading metabolite file, no data found. Please check format is correct.")
     }
     if(!"manualAGORA" %in% config_table[,V1]){
       network_results = build_metabolic_model(species, config_table, degree_filt = 0, netAdd = data_inputs$netAdd)

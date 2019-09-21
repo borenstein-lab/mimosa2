@@ -12,7 +12,7 @@ spec_table_fix = function(species_table){
   otu_col = names(species_table)[names(species_table) %in% c("OTU", "#OTU ID", "Sequence", "ASV")]
   if(length(otu_col) != 1) stop("Species data must have a valid OTU/sequence column name, one of: OTU/#OTU ID/Sequence/ASV")
   setnames(species_table, otu_col, "OTU")
-  species_table = species_table[rowSums(species_table[,names(species_table) != "OTU", with=F]) > 0]
+  species_table = species_table[rowSums(species_table[,names(species_table) != "OTU", with=F], na.rm = T) > 0]
   if(any(duplicated(species_table[,OTU]))){ #Deal with duplicated features
     dup_otus = species_table[duplicated(OTU), OTU]
     for(k in 1:length(dup_otus)){
@@ -68,13 +68,14 @@ met_table_fix = function(met_table, nzero_filt = 5){
 #' filter_species_abunds(species_dat)
 #' @export
 filter_species_abunds = function(species_dat, filter_type = "mean", minMeanAbund = 0, minSampFrac = 0){ #0.001, 0.01 previously
+  species_dat[,OTU:=as.character(OTU)]
   species2 = melt(species_dat, id.vars = "OTU")
-  species2[,relAbund:=value/sum(value), by=variable]
+  species2[,relAbund:=value/sum(value, na.rm = T), by=variable]
   if(filter_type=="mean"){
-    mean_abunds = species2[,mean(relAbund), by=OTU]
+    mean_abunds = species2[,mean(relAbund, na.rm = T), by=OTU]
     good_species = mean_abunds[V1 >= minMeanAbund, OTU]
   } else if(filter_type=="fracNonzero"){
-    abund_counts = species2[,sum(relAbund != 0)/length(relAbund), by=OTU]
+    abund_counts = species2[,sum(relAbund != 0, na.rm = T)/length(relAbund), by=OTU]
     good_species = abund_counts[V1 >= minSampFrac, OTU]
   }
   return(species_dat[OTU %in% good_species])

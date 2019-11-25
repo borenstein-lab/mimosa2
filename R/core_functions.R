@@ -16,7 +16,7 @@
 #' run_mimosa1(species, mets)
 #' @export
 run_mimosa1 = function(species, mets, species_file = "mimosa1", picrust_file_paths = c("data/picrustGenomeData/16S_13_5_precalculated.tab.gz", "data/picrustGenomeData/indivGenomes/", "_genomic_content.tab"),
-                       rxn_path = "data/KEGGfiles/full_rxn_table.txt", simulated = F, config_table = NULL){
+                       rxn_path = "data/KEGG/full_rxn_table.txt", simulated = F, config_table = NULL){
   if(!simulated){
     contrib_table = generate_contribution_table_using_picrust(species, picrust_file_paths[1], picrust_file_paths[2], picrust_file_paths[3], copynum_column = T)
     print(contrib_table)

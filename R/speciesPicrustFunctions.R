@@ -333,7 +333,7 @@ get_rep_seqs_from_otus = function(otus, database = database_choices[2], rep_seq_
 #' @examples
 #' generate_preprocessed_networks("AGORA", dat_path = "data/AGORA/", )
 generate_preprocessed_networks = function(database, model_table_file = NULL, picrust_ko_path = "data/picrustGenomeData/", 
-                                                  kegg_paths = c("data/KEGGfiles/reaction_mapformula.lst", "data/KEGGfiles/reaction_ko.list", "data/KEGGfiles/reaction"),
+                                                  kegg_paths = c("data/KEGG/reaction_mapformula.lst", "data/KEGG/reaction_ko.list", "data/KEGG/reaction"),
                                                   dat_path = paste0("data/", database, "/"), out_path = paste0("data/", database, "/RxnNetworks/")
                                                   ){
   if(database %in% c("KEGG", "picrustGG")){ #anything kegg related
@@ -367,6 +367,7 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
         write.table(spec_mod, file = paste0(out_path, x, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
       }
     } else {
+      out_path = gsub("RxnNetworks/", "", out_path)
       write.table(network_template, file = paste0(out_path, "network_template.txt"), quote = F, row.names = F, sep = "\t")
     }
   }else if(grepl("embl", database)){ #Embl gems

@@ -1671,7 +1671,7 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, re
 #' @examples
 #' add_to_network(network, netAddTable)
 #' @export
-add_to_network = function(network, addTable, target_format = NULL, source_format = NULL, kegg_path = "data/KEGGfiles/", data_path = "data/"){
+add_to_network = function(network, addTable, target_format = NULL, source_format = NULL, kegg_path = "data/KEGG/", data_path = "data/"){
   if(is.null(source_format)) source_format = get_compound_format(network[,unique(Reac)])
   if(is.null(target_format) & "Reac" %in% names(addTable) & "Prod" %in% names(addTable)) target_format = get_compound_format(addTable[,c(unique(Reac), unique(Prod))]) else target_format = "KEGG" #Just assume KEGG if only genes provided
   print(source_format)
@@ -1805,7 +1805,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
   all_params = c(req_params,  "metType", "netAdd", "simThreshold", "kegg_prefix", "vsearch_path", "compare_only") #Move to package sysdata?  "metagenome", "metagenome_format",
   config_table[V2=="", V2:=FALSE]
   if(!"kegg_prefix" %in% config_table[,V1]){
-    config_table = rbind(config_table, data.table(V1 = "kegg_prefix", V2 = paste0(config_table[V1=="data_prefix", V2], "/KEGGfiles/")))
+    config_table = rbind(config_table, data.table(V1 = "kegg_prefix", V2 = paste0(config_table[V1=="data_prefix", V2], "/KEGG/")))
   }
   if(length(all_params[!all_params %in% config_table[,V1]]) > 0){
     config_table = rbind(config_table, data.table(V1 = all_params[!all_params %in% config_table[,V1]], V2 = FALSE))

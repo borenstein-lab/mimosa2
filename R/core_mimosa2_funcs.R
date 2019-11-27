@@ -8,11 +8,12 @@
 #' @param rank_based Whether to use Rfit instead of standard linear regression
 #' @param rank_type Type of robust regression to use (Rfit or mblm)
 #' @param cmp_nonzero_min Filter metabolites that have fewer than this number of nonzero CMP scores
+#' @param FDRcorrect Whether to include a column of FDR-corrected p-values
 #' @return List of 2 data.tables - one with model summary results, one with model residuals
 #' @examples
 #' fit_cmp_mods(species_cmps, met_data)
 #' @export
-fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "Rfit", cmp_nonzero_min = 4){
+fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "Rfit", cmp_nonzero_min = 4, FDRcorrect = T){
     tot_cmps = species_cmps[,sum(CMP), by=list(compound, Sample)]
     #Fill in any missing 0s
     tot_cmps = melt(dcast(tot_cmps, compound~Sample, value.var = "V1", fill = 0), id.var = "compound", variable.name = "Sample")
@@ -67,6 +68,9 @@ fit_cmp_mods = function(species_cmps, mets_melt, rank_based = F, rank_type = "Rf
         } 
         resid_dat[compound==all_comps[x], Resid:=scaling_resids]
       }
+    }
+    if(FDRcorrect){
+      model_dat[,FDRAdj:=p.adjust(PVal, method = "BH")]
     }
     return(list(model_dat, resid_dat))
 }
@@ -444,8 +448,8 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
     if("Var" %in% names(var_share_results)) setnames(var_share_results, "Var", "VarDisp")
     if("NullDisp" %in% names(var_share_results)) setnames(var_share_results, "NullDisp", "VarDisp")
     #Compound-level values first, then species-level contributions
-    var_share_results = var_share_results[,list(compound, Rsq, VarDisp, PVal, Slope, Intercept, Species, VarShare, PosVarShare)]
-    setnames(var_share_results, "PVal", "ModelPVal")
+    var_share_results = var_share_results[,list(compound, Rsq, VarDisp, PVal, FDRAdj, Slope, Intercept, Species, VarShare, PosVarShare)]
+    setnames(var_share_results, c("PVal", "FDRAdj"), c("ModelPVal", "ModelPValFDRAdj"))
   }
   return(var_share_results)
 }
@@ -1983,7 +1987,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       var_shares[,Species:=as.character(Species)]
       var_shares[,MetaboliteName:=met_names(as.character(compound))]
       var_shares[is.na(MetaboliteName), MetaboliteName:=compound]
-      var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
+      var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, ModelPValFDRAdj, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
     }
     if(make_plots){
       CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])

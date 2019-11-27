@@ -5,7 +5,7 @@
 \title{Fits model scaling total CMPs to metabolite concentrations}
 \usage{
 fit_cmp_mods(species_cmps, mets_melt, rank_based = F,
-  rank_type = "Rfit", cmp_nonzero_min = 4)
+  rank_type = "Rfit", cmp_nonzero_min = 4, FDRcorrect = T)
 }
 \arguments{
 \item{species_cmps}{Table of species contribution abundances}
@@ -17,6 +17,8 @@ fit_cmp_mods(species_cmps, mets_melt, rank_based = F,
 \item{rank_type}{Type of robust regression to use (Rfit or mblm)}
 
 \item{cmp_nonzero_min}{Filter metabolites that have fewer than this number of nonzero CMP scores}
+
+\item{FDRcorrect}{Whether to include a column of FDR-corrected p-values}
 }
 \value{
 List of 2 data.tables - one with model summary results, one with model residuals

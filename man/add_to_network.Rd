@@ -5,7 +5,7 @@
 \title{Add reactions to a network. Will set stoichiometry and copy number to 1 if missing. Format can be either "KO, Rxn, Prod" for reaction IDs with all transformations and correct stoichiometry, or just "KO" but with reaction IDs that are defined in the KEGG network.}
 \usage{
 add_to_network(network, addTable, target_format = NULL,
-  source_format = NULL, kegg_path = "data/KEGGfiles/",
+  source_format = NULL, kegg_path = "data/KEGG/",
   data_path = "data/")
 }
 \arguments{

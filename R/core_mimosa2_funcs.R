@@ -440,7 +440,8 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
   }
   if(!is.null(var_share_results)){
     var_share_results[,Species:=as.character(Species)]
-    var_share_results[Species != "Residual", PosVarShare:=ifelse(VarShare > 0, VarShare/sum(VarShare[VarShare > 0], na.rm=T),0), by=compound]
+    var_share_results = var_share_results[Species != "Residual"]
+    #var_share_results[Species != "Residual", PosVarShare:=ifelse(VarShare > 0, VarShare/sum(VarShare[VarShare > 0], na.rm=T),0), by=compound]
   } 
   #Consistnet column names
   if(!is.null(var_share_results)){
@@ -448,7 +449,7 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
     if("Var" %in% names(var_share_results)) setnames(var_share_results, "Var", "VarDisp")
     if("NullDisp" %in% names(var_share_results)) setnames(var_share_results, "NullDisp", "VarDisp")
     #Compound-level values first, then species-level contributions
-    var_share_results = var_share_results[,list(compound, Rsq, VarDisp, PVal, FDRAdj, Slope, Intercept, Species, VarShare, PosVarShare)]
+    var_share_results = var_share_results[,list(compound, Rsq, VarDisp, PVal, FDRAdj, Slope, Intercept, Species, VarShare)] #, PosVarShare
     setnames(var_share_results, c("PVal", "FDRAdj"), c("ModelPVal", "ModelPValFDRAdj"))
   }
   return(var_share_results)
@@ -1156,6 +1157,9 @@ read_mimosa2_files = function(file_list, configTable, app = T){
     shared_samps = intersect(names(mets), species[,unique(Sample)])
   }
   if(length(shared_samps) < 2) stop("Sample IDs don't match between species and metabolites")
+  if(length(shared_samps) < 4){
+    stop("Insufficient samples found. Must have at least 4 samples with consistent IDs in both the microbiome and metabolite datasets.")
+  }
   spec_colname = ifelse(configTable[V1=="file1_type", V2==get_text("database_choices")[4]], "KO", "OTU")
   if(humann2_metagenome == F ) species = species[,c(spec_colname, shared_samps), with=F] else {
     species = species[Sample %in% shared_samps]
@@ -1215,7 +1219,7 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
   if(!manual_agora){
     if(config_table[V1=="file1_type", V2==get_text("database_choices")[1]]){ ### Sequence variatns
       seq_list = species[,OTU]
-      if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page.")
+      if(any(grepl("[0-9]+", seq_list)|grepl("[B|D-F|H-S|U-Z|b|d-f|h-s|u-z]+", seq_list))) stop("Feature IDs have non-nucleotide characters, but the sequence variant input option was selected. If the rows of your table are OTU IDs, select the option for their database source on the input page. If the rows of your table are qiime2-produced ASV IDs, please reformat your dataset to provide the sequences themselves as the ID column.")
       if(config_table[V1=="ref_choices", V2==get_text("source_choices")[1]]) { ## Greengenes
         seq_results = map_seqvar(seq_list, repSeqDir = paste0(config_table[V1=="data_prefix", V2], "/picrustGG/"), repSeqFile = "gg_13_8_99_db.udb", add_agora_names = F, seqID = 0.99, vsearch_path = ifelse("vsearch_path" %in% config_table[,V1], config_table[V1=="vsearch_path", V2], "vsearch")) #Run vsearch to get gg OTUs
         species[,seqID:=paste0("seq", 1:nrow(species))]

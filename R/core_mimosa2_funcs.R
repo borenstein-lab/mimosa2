@@ -1991,7 +1991,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       var_shares[,Species:=as.character(Species)]
       var_shares[,MetaboliteName:=met_names(as.character(compound))]
       var_shares[is.na(MetaboliteName), MetaboliteName:=compound]
-      var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, ModelPValFDRAdj, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
+      var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, ModelPValFDRAdj, Slope, Intercept, Species, VarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
     }
     if(make_plots){
       CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])

@@ -190,7 +190,7 @@ test_results_normal = function(config_table, file_prefix, make_plots = F){
     var_shares[,Species:=as.character(Species)]
     var_shares[,MetaboliteName:=met_names(as.character(compound))]
     var_shares[is.na(MetaboliteName), MetaboliteName:=compound]
-    var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, ModelPValFDRAdj, Slope, Intercept, Species, VarShare, PosVarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
+    var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, ModelPValFDRAdj, Slope, Intercept, Species, VarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
   }
   if(make_plots){
     CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])
@@ -235,8 +235,8 @@ test_results_normal = function(config_table, file_prefix, make_plots = F){
   if(!is.null(var_shares)){
     contribs_all = var_shares[Species != "Residual",sum(VarShare), by=list(compound, Rsq)]
     expect_true(contribs_all[,all(abs(V1-Rsq) < 10e-10)])
-    contribs_all2 = var_shares[,sum(VarShare), by=compound] #Including residual
-    expect_true(contribs_all2[,all(abs(V1-1) < 10e-10)])
+    # contribs_all2 = var_shares[,sum(VarShare), by=compound] #No longer including residual
+    # expect_true(contribs_all2[,all(abs(V1-1) < 10e-10)])
   }
   #Get shared legend
   # if(!config_table[V1 == "compare_only", identical(V2, TRUE)]){

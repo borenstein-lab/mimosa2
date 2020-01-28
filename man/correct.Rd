@@ -2,7 +2,19 @@
 % Please edit documentation in R/misc_helper_functions.R
 \name{correct}
 \alias{correct}
-\title{Multiple hypothesis correction}
+\title{#' Title
+#'
+#' @param nrow 
+#' @param ncol 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+make_perm_mat2 = function(nrow, ncol){
+  make_perm_mat(nrow, ncol)
+}
+Multiple hypothesis correction}
 \usage{
 correct(pvals, method = "fdr")
 }
@@ -15,6 +27,18 @@ correct(pvals, method = "fdr")
 Vector of corrected values
 }
 \description{
+#' Title
+#'
+#' @param nrow 
+#' @param ncol 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+make_perm_mat2 = function(nrow, ncol){
+  make_perm_mat(nrow, ncol)
+}
 Multiple hypothesis correction
 }
 \examples{

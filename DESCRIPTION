@@ -5,13 +5,14 @@ Authors@R: person("Cecilia", "Noecker", email = "cnoecker@uw.edu", role = c("aut
 Description: What the package does (one paragraph).
 Depends:
     R (>= 3.2.2)
-License: What license is it under?
+License: GNU GPL v3.0
 Encoding: UTF-8
 LazyData: true
 Imports:
     Biostrings,
     MetaboAnalystR,
     R.matlab,
+    gtools,
     RColorBrewer,
     Rfit,
     cowplot,
@@ -22,6 +23,7 @@ Imports:
     RColorBrewer,
     stringr,
     qvalue,
+    biomartr,
     reshape2,
     permute,
     Rcpp,
@@ -31,6 +33,8 @@ Imports:
 Suggests:
     KEGGREST,
     readr,
-    testthat
+    testthat,
+    knitr,
+    rBLAST
 RoxygenNote: 6.1.1
 LinkingTo: Rcpp

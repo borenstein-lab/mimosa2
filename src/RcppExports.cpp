@@ -5,17 +5,6 @@
 
 using namespace Rcpp;
 
-// timesTwo
-NumericVector timesTwo(NumericVector x);
-RcppExport SEXP _mimosa_timesTwo(SEXP xSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(timesTwo(x));
-    return rcpp_result_gen;
-END_RCPP
-}
 // randomShuffle
 Rcpp::NumericVector randomShuffle(Rcpp::NumericVector a);
 RcppExport SEXP _mimosa_randomShuffle(SEXP aSEXP) {
@@ -41,7 +30,6 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_mimosa_timesTwo", (DL_FUNC) &_mimosa_timesTwo, 1},
     {"_mimosa_randomShuffle", (DL_FUNC) &_mimosa_randomShuffle, 1},
     {"_mimosa_make_perm_mat", (DL_FUNC) &_mimosa_make_perm_mat, 2},
     {NULL, NULL, 0}

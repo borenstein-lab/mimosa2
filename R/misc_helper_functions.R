@@ -282,18 +282,18 @@ mantel_2sided = function (xdis, ydis, method = "pearson", permutations = 999,
   return(res)
 }
 
-#' Title
-#'
-#' @param nrow 
-#' @param ncol 
-#'
-#' @return
-#' @export
-#'
-#' @examples
-make_perm_mat2 = function(nrow, ncol){
-  make_perm_mat(nrow, ncol)
-}
+#' #' Title
+#' #'
+#' #' @param nrow 
+#' #' @param ncol 
+#' #'
+#' #' @return
+#' #' @export
+#' #'
+#' #' @examples
+#' make_perm_mat2 = function(nrow, ncol){
+#'   make_perm_mat(nrow, ncol)
+#' }
 
 #' Multiple hypothesis correction
 #'

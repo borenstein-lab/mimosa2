@@ -13,10 +13,10 @@ using namespace Rcpp;
 //   http://gallery.rcpp.org/
 //
 
-// [[Rcpp::export]]
-NumericVector timesTwo(NumericVector x) {
-  return x * 2;
-}
+// // [[Rcpp::export]]
+// NumericVector timesTwo(NumericVector x) {
+//   return x * 2;
+// }
 
 // wrapper around R's RNG such that we get a uniform distribution over
 // [0,n) as required by the STL algorithm

@@ -268,6 +268,11 @@ test_that("Seq var -> AGORA species", {
   test_results_normal(config1, "test_seq_agora_rank")
 })
 
+test_that("Compare only", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1 = rbind(config1, data.table(V1 = "compare_only", V2 = T))
+  test_results_normal(config1, file_prefix = "test_seq_agora_compareOnly")
+})
 
 test_that("Seq var -> Greengenes OTUs, species-rxn KEGG mods", {
   config1 = fread(test_config_file1, header = F, fill = T)

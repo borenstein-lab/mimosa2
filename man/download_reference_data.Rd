@@ -5,7 +5,9 @@
 \title{Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables}
 \usage{
 download_reference_data(seq_db = get_text("database_choices")[1],
-  target_db = get_text("source_choices")[2], save_to = "data/")
+  target_db = get_text("source_choices")[2], save_to = paste0(getwd(),
+  "/"),
+  source_url = "http://elbo-spice.gs.washington.edu/shiny/MIMOSA2shiny/refData/")
 }
 \arguments{
 \item{seq_db}{Microbiome data source type: must be one of "Sequence variants (ASVs)", "Greengenes 13_5 or 13_8 OTUs", or "SILVA 132 OTUs"}

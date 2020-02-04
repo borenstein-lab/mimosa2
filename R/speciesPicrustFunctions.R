@@ -425,7 +425,7 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
 #' @examples
 #' download_reference_data("Sequence variants (ASVs)", "AGORA genomes and models")
 #' @export
-download_reference_data = function(seq_db = get_text("database_choices")[1], target_db = get_text("source_choices")[2], save_to = "data/"){
+download_reference_data = function(seq_db = get_text("database_choices")[1], target_db = get_text("source_choices")[2], save_to = paste0(getwd(), "/"), source_url = "http://elbo-spice.gs.washington.edu/shiny/MIMOSA2shiny/refData/"){
   if(grepl("AGORA", target_db, ignore.case = T)){
     target1 = "AGORA"
   } else if(grepl("EMBL", target_db, ignore.case = T)){
@@ -436,16 +436,31 @@ download_reference_data = function(seq_db = get_text("database_choices")[1], tar
   } else if(grepl("OTU", seq_db, ignore.case = T)){
     source1 = "OTU"
   }
+  #save_to = paste0(save_to, "/", target1, "/")
   if(grepl("KEGG", target_db)){
     stop("KEGG resources cannot be downloaded")
   }
   file_id = paste0(source1, "_", target1, ".tar.gz")
-  download1 = download.file(paste0("http://elbo-spice.gs.washington.edu/shiny/MIMOSA2shiny/refData/", file_id), destfile = file_id)
+  cat(file_id)
+  download1 = download.file(paste0(source_url, file_id), destfile = paste0(save_to,"/", file_id))
   if(download1 != 0) stop("Download failed, please download manually") else {
-    cat("Data downloaded to ", getwd())
+    cat("\nData downloaded to ", save_to)
   }
-  untar(file_id)
-  file.rename(from = paste0(source1, "_", target1, "/data/"), to = save_to)
+  new_file_id = paste0(save_to, file_id)
+  #file.rename(from = file_id, to = new_file_id)
+  untar(new_file_id, exdir = path.expand(save_to))
+  if(!dir.exists(paste0(save_to, "data"))){
+    dir.create(path = paste0(save_to, "data"))
+  }
+  #file.copy(from = paste0(save_to, source1, "_", target1, "/data/"), to = save_to, recursive = T, overwrite = T)
+  for(file1 in list.files(path = paste0(save_to, source1, "_", target1, "/data/"))){
+    print(file1)
+    file.copy(from = paste0(save_to, source1, "_", target1, "/data/", file1), to = paste0(save_to, "data/"), overwrite = T, recursive = T)
+  }
+  #file.copy(from = paste0(save_to, source1, "_", target1, "/data/"), to = paste0(save_to, "data/"), overwrite = T)
+  file.copy(from = paste0(save_to, source1, "_", target1, "/README"), to = paste0(save_to, "/data/", source1, "_", target1, "_README"), overwrite = T)
+  unlink(paste0(save_to, source1, "_", target1))
+  
   cat("Set up the data directory, ready for mimosa2 analysis\n")
 }
 

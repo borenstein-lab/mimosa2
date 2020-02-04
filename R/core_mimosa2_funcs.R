@@ -1373,11 +1373,12 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
 #' @param leave_rxns Return individual abundance/direction scores for each species and rxn
 #' @param kos_only Whether to call non-species-specific version of this function instead
 #' @param remove_rev Whether to remove reversible reactions before calculating anything
+#' @param fill_zeros Whether to consider samples with no relevant information on a metabolite as having 0 score (vs a missing value)
 #' @return data.table of cmp scores for each taxon and compound
 #' @examples
 #' get_species_cmp_scores(species_data, network)
 #' @export
-get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F, kos_only = F, remove_rev = T){
+get_species_cmp_scores = function(species_table, network, normalize = T, relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F, kos_only = F, remove_rev = T, fill_zeros = T){
   if(kos_only){
     spec_cmps = get_cmp_scores_kos(species_table, network, normalize = normalize, leave_rxns = leave_rxns)
     return(spec_cmps)
@@ -1431,6 +1432,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       spec_cmps = merge(species_table, net2, by = c("OTU", "KO"), allow.cartesian = T)
     }
     spec_cmps[,CMP:=value*stoich]
+    if(fill_zeros) spec_cmps[is.na(CMP), CMP:=0]
     spec_cmps[,SpecRxn:=paste0(OTU, "_", KO)]
     all_comps = spec_cmps[,unique(compound)]
     #Option to get abundance scores for each species and rxn
@@ -1442,7 +1444,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
         spec_cmps[,compound:=NULL]
         setnames(spec_cmps, "KEGG", "compound")
       }
-      spec_cmps = spec_cmps[,sum(CMP), by = list(OTU, Sample, compound, value)]
+      spec_cmps = spec_cmps[,sum(CMP, na.rm = T), by = list(OTU, Sample, compound, value)]
       # spec_cmps = spec_cmps[,list(sum(CMP), length(unique(KO[CMP > 0])), length(unique(OTU[CMP > 0])), length(unique(SpecRxn[CMP > 0])), 
       #                             length(unique(KO[CMP < 0])), length(unique(OTU[CMP < 0])), length(unique(SpecRxn[CMP < 0]))), by=list(OTU, Sample, compound, value)]
       #spec_cmps[abs(CMP) < 10e-16 & abs(CMP) > 0, CMP:=0]
@@ -1468,7 +1470,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       }
       
       setnames(spec_cmps, "OTU", "Species")
-      bad_specRxn = spec_cmps[,length(CMP[CMP != 0]), by=SpecRxn][V1==0, SpecRxn]
+      bad_specRxn = spec_cmps[!is.na(CMP), length(CMP[CMP != 0]), by=SpecRxn][V1==0, SpecRxn]
       spec_cmps = spec_cmps[!SpecRxn %in% bad_specRxn]
       spec_cmps[,SpecRxn:=NULL]
     }

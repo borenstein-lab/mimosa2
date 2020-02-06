@@ -934,10 +934,10 @@ plot_contributions = function(varShares, metabolite, metIDcol = "metID", include
     if(include_residual){
       spec_order = c("Residual", "Other", spec_order)
     }
-    print(spec_order)
+    #print(spec_order)
     plot_dat[,Species:=factor(Species, levels = spec_order)]
   }
-  print(plot_dat)
+  #print(plot_dat)
   ggplot(plot_dat,  aes(y=VarShare, x = Species, fill = Species)) + geom_bar(stat = "identity") + scale_fill_manual(values = color_pals) + geom_abline(intercept = 0, slope = 0, linetype = 2) +
     theme(strip.background = element_blank(), axis.ticks.y = element_blank(), axis.text.x = element_text(size=7), axis.text.y = element_blank(),
           legend.title = element_blank(), strip.text = element_blank(), axis.title.y = element_blank(), axis.title.x = element_text(size = 10), 
@@ -1136,7 +1136,9 @@ read_mimosa2_files = function(file_list, configTable, app = T){
            species = humann2_format_contributions(species, file_read = T)
         }
         #Fill in samples missing for some gene-species combos
+	  #print(dim(species))
         species = melt(dcast(species, OTU+Gene~Sample, value.var = "CountContributedByOTU", fill = 0), id.var = c("OTU", "Gene"), variable.name = "Sample", value.name = "CountContributedByOTU")
+	  #print(dim(species))
       } else { #Unstratified
         if(!"KO" %in% names(species)){
           if("function" %in% names(species)){
@@ -1392,6 +1394,8 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       if(all(c("Gene", "CountContributedByOTU") %in% names(species_table))){
         setnames(species_table, c("Gene", "CountContributedByOTU"), c("KO", "value"))
       }
+      #Fill in 0s
+      species_table = melt(dcast(species_table, OTU+KO~Sample, value.var = "value", fill = 0), id.var = c("OTU", "KO"), variable.name = "Sample")
     }
     species_table[,Sample:=as.character(Sample)]
     #Convert species to relative abundance if requested
@@ -1432,7 +1436,6 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       spec_cmps = merge(species_table, net2, by = c("OTU", "KO"), allow.cartesian = T)
     }
     spec_cmps[,CMP:=value*stoich]
-    if(fill_zeros) spec_cmps[is.na(CMP), CMP:=0]
     spec_cmps[,SpecRxn:=paste0(OTU, "_", KO)]
     all_comps = spec_cmps[,unique(compound)]
     #Option to get abundance scores for each species and rxn
@@ -1456,9 +1459,18 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       spec_cmps[,value:=NULL]
       #Value might be different if copy number was previously incorporated
       spec_cmps = spec_cmps[,sum(CMP), by=list(Species, Sample, compound)]
+      
       #spec_cmps = spec_cmps[,list(sum(CMP), sum(NumSynthGenes), sum(NumSynthSpecies), sum(NumSynthSpecGenes), sum(NumDegGenes), sum(NumDegSpecies), sum(NumDegSpecGenes)), by=list(Species, Sample, compound)]
       #setnames(spec_cmps, c("V1", "V2", "V3", "V4", "V5", "V6", "V7"), c("CMP", "NumSynthGenes", "NumSynthSpecies", "NumSynthSpecGenes", "NumDegGenes", "NumDegSpecies", "NumDegSpecGenes"))
       setnames(spec_cmps, "V1", "CMP")
+      if(fill_zeros){
+        spec_cmps = melt(dcast(spec_cmps, compound+Species~Sample, value.var = "CMP", fill = 0), id.var = c("compound", "Species"), variable.name = "Sample", value.name = "CMP", variable.factor = F)
+        all_comp_mappings = data.table(expand.grid(spec_cmps[,unique(compound)], spec_cmps[,unique(Species)], spec_cmps[,unique(Sample)]))
+        spec_cmps = merge(spec_cmps, all_comp_mappings, by.x = c("compound", "Species", "Sample"), by.y = c("Var1", "Var2", "Var3"), all = T)
+        spec_cmps[is.na(CMP), CMP:=0]
+        #print(dim(spec_cmps))
+      } 
+      
     } else {
       if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
         #Convert AGORA IDs to KEGG IDs
@@ -1655,6 +1667,8 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, re
     # spec_cmps[,NumDegSpecies:=""]
     # spec_cmps[,NumSynthSpecGenes:=""]
     # spec_cmps[,NumDegSpecGenes:=""]
+    spec_cmps = melt(dcast(spec_cmps, compound~Sample, value.var = "CMP", fill = 0), id.var = "compound", variable.name = "Sample", value.name = "CMP", variable.factor = F)
+
   }
   #all_comps = spec_cmps[,unique(compound)]
   # if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2){ #If compounds are not KEGG IDs - this will not happen with KOs
@@ -2054,12 +2068,12 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     }
     if(make_plots){
       return(list(varShares = var_shares, modelData = cmp_mods[[1]], 
-                  networkData = network, newSpecies = species, CMPScores = indiv_cmps[CMP != 0], 
+                  networkData = network, newSpecies = species, CMPScores = indiv_cmps, 
                   analysisSummary = analysis_summary, configs = config_table, CMPplots = CMP_plots, 
                   metContribPlots = met_contrib_plots, plotLegend = contrib_legend))
     } else {
       return(list(varShares = var_shares, modelData = cmp_mods[[1]], networkData = network, newSpecies = species, 
-                  CMPScores = indiv_cmps[CMP != 0], analysisSummary = analysis_summary, configs = config_table))
+                  CMPScores = indiv_cmps, analysisSummary = analysis_summary, configs = config_table))
     }
     
 

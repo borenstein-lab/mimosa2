@@ -364,11 +364,11 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
         spec_mod = merge(spec_mod, picrust_normalization_table, by = "OTU", all.x=T, all.y=F)
         spec_mod[,normalized_copy_number:=copy_number/norm_factor]
         spec_mod = spec_mod[,list(OTU, KO, Reac, Prod, stoichReac, stoichProd, normalized_copy_number)]
-        write.table(spec_mod, file = paste0(out_path, x, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
+        write.table(spec_mod, file = paste0(out_path, "/", x, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
       }
     } else {
       out_path = gsub("RxnNetworks/", "", out_path)
-      write.table(network_template, file = paste0(out_path, "network_template.txt"), quote = F, row.names = F, sep = "\t")
+      write.table(network_template, file = paste0(out_path,"/", "network_template.txt"), quote = F, row.names = F, sep = "\t")
     }
   }else if(grepl("embl", database)){ #Embl gems
     genome_info = get_text("embl_gems_model_data")
@@ -391,7 +391,7 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
       mod1 = merge(mod1, genome_info[,list(ModelID, CopyNum16S)], all.x = T, by.x = "Species", by.y = "ModelID")
       mod1[,normalized_copy_number:=ifelse(CopyNum16S==0|is.na(CopyNum16S), 1, copy_number/CopyNum16S)]
       mod1 = mod1[,list(Species, KO, Reac, Prod, stoichReac, stoichProd, normalized_copy_number, LB, UB, Rev)]
-      write.table(mod1, file = paste0(out_path, spec, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
+      write.table(mod1, file = paste0(out_path,"/", spec, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
     }
     
   } else { #AGORA - type
@@ -410,7 +410,7 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
       mod1 = merge(mod1, genome_info[,list(ModelAGORA, CopyNum)], all.x = T, by.x = "Species", by.y = "ModelAGORA")
       mod1[,normalized_copy_number:=ifelse(CopyNum==0|is.na(CopyNum), 1, copy_number/CopyNum)]
       mod1 = mod1[,list(Species, KO, Reac, Prod, stoichReac, stoichProd, normalized_copy_number, LB, UB, Rev)]
-      write.table(mod1, file = paste0(dat_path, spec, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
+      write.table(mod1, file = paste0(out_path, "/", spec, "_rxns.txt"), quote=F, row.names=F, sep = "\t")
     }
   }
 }

@@ -1822,6 +1822,10 @@ check_config_table = function(config_table, data_path = "data/", app = F){
   if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
     config_table[V1=="compare_only", V2:="TRUE"]    
   }
+  if(config_table[,any(duplicated(V1))]){
+    warning("Duplicated fields in configuration table, only the first instance will be used")
+    config_table = config_table[-which(duplicated(V1))]
+  }
   return(config_table)
 }
 
@@ -1832,11 +1836,13 @@ check_config_table = function(config_table, data_path = "data/", app = F){
 #' @param species Optionally provide already-read-in species data
 #' @param mets Optionally provide already-read-in metabolite data
 #' @param make_plots Whether to generate plots for each metabolite and extended output (as provided via the web server)
+#' @param save_plots Whether to save plots to files
+#' @param plot_dir Path for saving plots
 #' @return Scaling model and variance contribution results
 #' @examples
 #' run_mimosa2(config_table, species, mets)
 #' @export
-run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, save_plots = F){
+run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, save_plots = F, plot_dir = "mimosa2plots"){
   #process arguments
   #Read config table if it is filename
     if(typeof(config_table)=="character"){
@@ -1900,7 +1906,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       no_spec_param = F
       humann2_param = T
       rel_abund_param = F
-      cat("Humann2 format\n")
+      #cat("Humann2 format\n")
     } else {
       no_spec_param = F
       humann2_param = F
@@ -1982,7 +1988,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     cmp_mods[[1]] = merge(cmp_mods[[1]], cmp_summary$CompLevelSummary, by = "compound", all.x = T)
     #Add species/rxn info
     
-    if(length(cmp_summary) > 1) var_shares = merge(var_shares, cmp_summary$SpeciesLevelSummary, by = c("compound", "Species"), all.x = T)
+    if(length(cmp_summary) > 1 & !is.null(var_shares)) var_shares = merge(var_shares, cmp_summary$SpeciesLevelSummary, by = c("compound", "Species"), all.x = T)
     cmp_mods[[1]][,compound:=as.character(compound)]
     indiv_cmps[,compound:=as.character(compound)]
     
@@ -2028,26 +2034,27 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       network[,KEGGReac:=agora_kegg_mets(Reac)]
       network[,KEGGProd:=agora_kegg_mets(Prod)]
     } 
+    #print(data_inputs[[1]])
     analysis_summary = get_analysis_summary(input_species = data_inputs[[1]], species = species, mets = mets, network = network, indiv_cmps = indiv_cmps, cmp_mods = cmp_mods, var_shares = var_shares, config_table = config_table, pval_threshold = signifThreshold)
     if(save_plots & make_plots){
       #Save plots
-      if(!dir.exists("mimosa2plots")){
-        dir.create(path = "mimosa2plots", showWarnings = T)
+      if(!dir.exists(plot_dir)){
+        dir.create(path = plot_dir, showWarnings = T)
       }
       for(i in 1:length(CMP_plots)){
-        print(paste0("mimosa2plots/", names(CMP_plots)[i], ".png"))
+        print(paste0(plot_dir, "/", names(CMP_plots)[i], ".png"))
         if(!identical(CMP_plots[[i]], NA)){
-          save_plot(CMP_plots[[i]], file = paste0("mimosa2plots/", names(CMP_plots)[i], ".png"), base_width = 2, base_height = 2)
+          save_plot(CMP_plots[[i]], file = paste0(plot_dir, "/", names(CMP_plots)[i], ".png"), base_width = 2, base_height = 2)
         } 
       }
       if(!config_table[V1 == "compare_only", V2==T]){
         for(i in 1:length(met_contrib_plots)){
           print(comp_list[i])
           if(!is.null(met_contrib_plots[[i]])){
-            save_plot(met_contrib_plots[[i]] + guides(fill = F), file = paste0("mimosa2plots/", comp_list[i], "_contribs.png"), base_width = 2, base_height = 2)
+            save_plot(met_contrib_plots[[i]] + guides(fill = F), file = paste0(plot_dir, "/", comp_list[i], "_contribs.png"), base_width = 2, base_height = 2)
           }
         }
-        if(!is.null(contrib_legend)) save_plot(contrib_legend, file = paste0("mimosa2plots/contribLegend.png"), dpi=120, base_width = 5, base_height = 4)
+        if(!is.null(contrib_legend)) save_plot(contrib_legend, file = paste0(plot_dir, "/contribLegend.png"), dpi=120, base_width = 5, base_height = 4)
       } 
     }
     if(make_plots){

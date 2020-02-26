@@ -1832,6 +1832,15 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     config_table = rbind(config_table, data.table(V1 = "kegg_prefix", V2 = paste0(config_table[V1=="data_prefix", V2], "/KEGG/")))
   }
   if(length(all_params[!all_params %in% config_table[,V1]]) > 0){
+    if(!"simThreshold" %in% config_table[,V1]){
+      config_table = rbind(config_table, data.table(V1 = "simThreshold", V2 = 0.99))
+    }
+    if(!"vsearch_path" %in% config_table[,V1]){
+      config_table = rbind(config_table, data.table(V1 = "vsearch_path", V2 = "vsearch"))
+    }
+    if(!"metType" %in% config_table[,V1]){
+      config_table = rbind(config_table, data.table(V1 = "metType", V2 = get_text("met_type_choices")[1]))
+    }
     config_table = rbind(config_table, data.table(V1 = all_params[!all_params %in% config_table[,V1]], V2 = FALSE))
   }
   #if non-species metagenome is provided, set compare_only flag
@@ -1839,7 +1848,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     config_table[V1=="compare_only", V2:="TRUE"]    
   }
   if(config_table[,any(duplicated(V1))]){
-    warning("Duplicated fields in configuration table, only the first instance will be used")
+    warning("Duplicated fields in configuration table: ", config_table[duplicated(V1), V1], "\nOnly the first instance will be used")
     config_table = config_table[-which(duplicated(V1))]
   }
   return(config_table)
@@ -1877,6 +1886,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       if(nrow(species)==0) stop("Error reading microbiome file, no data found. Please check format is correct.")
       if(nrow(mets)==0) stop("Error reading metabolite file, no data found. Please check format is correct.")
     }
+    cat("Building community metabolic network model\n")
     if(!"manualAGORA" %in% config_table[,V1]){
       network_results = build_metabolic_model(species, config_table, degree_filt = 0, netAdd = data_inputs$netAdd)
       network = network_results[[1]]
@@ -1897,6 +1907,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     # }
     
     if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
+      cat("Mapping metabolite names to KEGG IDs\n")
       mets = map_to_kegg(mets)
     }
     #Get CMP scores
@@ -1966,6 +1977,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     if(met_transform != ""){
       mets_melt = transform_mets(mets_melt, met_transform)
     }
+    cat("Calculating community metabolic potential scores and fitting metabolite models\n")
     if(rxn_param){
       cmp_mods =  fit_cmp_net_edit(network, species, mets_melt, manual_agora = agora_param, rank_based = rank_based)
       network = cmp_mods[[3]] #Revised network
@@ -1991,6 +2003,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       } else {
         signifThreshold = 0.2
       }
+      cat("Calculating taxa contributions to metabolites\n")
       time1 = Sys.time()
       var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table, species_merge = bad_spec, signif_threshold = signifThreshold)
       cat(paste0("Contribution calculation time: ", Sys.time() - time1, "\n"))
@@ -1999,6 +2012,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       signifThreshold = 0.05 #This is just for the summary in this case
     }
     #Rxns, taxa summary
+    cat("Summarizing results\n")
     cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = F, kos_only = no_spec_param, humann2 = humann2_param, 
                                   met_subset = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0,compound], contrib_sizes = var_shares)
     cmp_mods[[1]] = merge(cmp_mods[[1]], cmp_summary$CompLevelSummary, by = "compound", all.x = T)
@@ -2008,6 +2022,9 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     cmp_mods[[1]][,compound:=as.character(compound)]
     indiv_cmps[,compound:=as.character(compound)]
     
+    cmp_mods[,MetaboliteName:=met_names(as.character(compound))]
+    cmp_mods[is.na(MetaboliteName), MetaboliteName:=compound]
+    
     if(!is.null(var_shares)){
       var_shares[,compound:=as.character(compound)]
       var_shares[,Species:=as.character(Species)]
@@ -2016,6 +2033,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       var_shares = var_shares[,list(compound, MetaboliteName, Rsq, VarDisp, ModelPVal, ModelPValFDRAdj, Slope, Intercept, Species, VarShare, NumSynthGenes, SynthGenes, NumDegGenes, DegGenes)]
     }
     if(make_plots){
+      cat("Making plots\n")
       CMP_plots = plot_all_cmp_mets(cmp_table = indiv_cmps, met_table = mets_melt, mod_results = cmp_mods[[1]])
       
       if(!compare_only){
@@ -2180,6 +2198,9 @@ map_seqvar = function(seqs, repSeqDir = "data/AGORA/", repSeqFile = "agora_NCBI_
   seqList = DNAStringSet(seqs)
   names(seqList) = paste0("seq", 1:length(seqList))
   if(method=="vsearch"){
+    if(!dir.exists(repSeqDir)){
+      stop("Error: The provided sequence directory does not exist. Is the reference database set up correctly?")
+    }
     writeXStringSet(seqList, filepath = paste0(repSeqDir, file_prefix, ".fasta"))
     command_to_run = paste0(vsearch_path, " --usearch_global ", repSeqDir, file_prefix, ".fasta --db ", repSeqDir, repSeqFile, " --id ", seqID," --strand both --blast6out ", repSeqDir, file_prefix, "vsearch_results.txt")
     if(otu_tab) command_to_run = paste0(command_to_run, " --otutabout ", repSeqDir, file_prefix, "otu_tab.txt")
@@ -2190,7 +2211,7 @@ map_seqvar = function(seqs, repSeqDir = "data/AGORA/", repSeqFile = "agora_NCBI_
     # seq_matches = data.table(seqID = names(results)[seq(1,length(results), by = 2)], databaseID = names(results)[seq(2,length(results), by = 2)])
     # seq_matches[,OrigSeq:=as.vector(results)[seq(1,length(results), by = 2)]]
     if(!file.exists(paste0(repSeqDir, file_prefix, "vsearch_results.txt"))){
-      stop("Error: Vsearch failed to align sequences to reference DB. Is your input file formatted correctly?")
+      stop("Error: Vsearch failed to align sequences to reference DB. Please make sure vsearch is installed and your input file is formatted correctly.")
     }
     results = fread(paste0(repSeqDir, file_prefix, "vsearch_results.txt"), header = F)
     setnames(results, paste0("V", 1:6), c("seqID", "dbID", "matchPerc", "alnlen", "mism", "gapopens"))
@@ -2230,7 +2251,10 @@ map_seqvar = function(seqs, repSeqDir = "data/AGORA/", repSeqFile = "agora_NCBI_
 
 #' Convert metabolite name table to KEGG metabolite table
 #'
-#' @import MetaboAnalystR
+#' @importFrom MetaboAnalystR InitDataObjects
+#' @importFrom MetaboAnalystR Setup.MapData
+#' @importFrom MetaboAnalystR CrossReferencing
+#' @importFrom MetaboAnalystR CreateMappingResultTable
 #' @import data.table
 #' @param met_table Table of metabolite abundances
 #' @return A new table of metabolite abundances using KEGG compound IDs
@@ -2252,6 +2276,58 @@ map_to_kegg = function(met_table){
   return(met_table)
 }
 
+#' Run toy analysis to test package installation
+#'
+#' @param test_vsearch Whether to test installation of vsearch
+#' @return None
+#' @examples
+#' test_m2_analysis()
+#' @export
+test_m2_analysis = function(test_vsearch = F){
+  config_table_toy = data.table(V1 = c("file1", "file2", "file1_type", "ref_choices", "data_prefix"), V2 = c("test_seqs.txt", "test_mets.txt", get_text("database_choices")[1], get_text("source_choices")[2], "~/Documents/MIMOSA2shiny/data/"))
+  config_table_toy = check_config_table(config_table_toy)
+  if(test_vsearch){
+    system("vsearch -h > vsearch_test")
+    info = file.info("vsearch_test")
+    if(info$size == 0){
+      cat("Vsearch is not installed or not in the system path\n")
+    } else {
+      cat("Vsearch is installed and available to MIMOSA2\n")
+    }
+    system("rm vsearch_test")
+    # cat("Building metabolic network, 16S ASVs -> AGORA database\n")
+    # network_results = build_metabolic_model(species_toy, config_table_toy, degree_filt = 0)    
+  } 
+  network = network_results_toy[[1]]
+  species = network_results_toy[[2]]
+  mets_melt = melt(mets_toy, id.var = "compound", variable.name = "Sample")
+  cat("Calculating metabolic potential\n")
+  indiv_cmps = get_species_cmp_scores(species, network, normalize = T, leave_rxns = F, manual_agora = F, kos_only = F, humann2 = F, relAbund = T)
+  indiv_cmps = indiv_cmps[compound %in% mets_toy[,compound]]
+  cat("Fitting CMP-metabolite models\n")
+  cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = T)
+  spec_dat = melt(species, id.var = "OTU", variable.name = "Sample")[,list(value/sum(value), OTU), by=Sample] #convert to relative abundance
+  bad_spec = spec_dat[,list(length(V1[V1 != 0])/length(V1), max(V1)), by=OTU]
+  bad_spec = bad_spec[V1 < 0.2 & V2 < 0.1, OTU] #Never higher than 10% and absent in at least 90% of samples
+  cat("Calculating taxa contributors to metabolites\n")
+  var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table_toy, species_merge = bad_spec, signif_threshold = 0.1)
+  cat("Test analysis successfully completed\n")
+}
+
+
+#' Check that MIMOSA2 can access reference databases in the correct format
+#'
+#' @param seq_db 
+#' @param target_db 
+#'
+#' @return T if ref data is accessible as expected, F if not
+#' @export
+#'
+#' @examples
+#' check_ref_data("Sequence variants (ASVs)", "AGORA genomes and models")
+check_ref_data = function(seq_db, target_db){
+  
+}
 
 #' Convert metabolite name table to KEGG metabolite table
 #'

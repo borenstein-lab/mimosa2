@@ -6,7 +6,7 @@
 \usage{
 get_species_cmp_scores(species_table, network, normalize = T,
   relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F,
-  kos_only = F, remove_rev = T)
+  kos_only = F, remove_rev = T, fill_zeros = T)
 }
 \arguments{
 \item{species_table}{OTU abundance table (wide format)}
@@ -26,6 +26,8 @@ get_species_cmp_scores(species_table, network, normalize = T,
 \item{kos_only}{Whether to call non-species-specific version of this function instead}
 
 \item{remove_rev}{Whether to remove reversible reactions before calculating anything}
+
+\item{fill_zeros}{Whether to consider samples with no relevant information on a metabolite as having 0 score (vs a missing value)}
 }
 \value{
 data.table of cmp scores for each taxon and compound

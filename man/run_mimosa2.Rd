@@ -5,7 +5,7 @@
 \title{Run a MIMOSA 2 analysis}
 \usage{
 run_mimosa2(config_table, species = "", mets = "", make_plots = F,
-  save_plots = F)
+  save_plots = F, plot_dir = "mimosa2plots")
 }
 \arguments{
 \item{config_table}{Data.table of input files and settings for MIMOSA analysis OR path to such a table}
@@ -15,6 +15,10 @@ run_mimosa2(config_table, species = "", mets = "", make_plots = F,
 \item{mets}{Optionally provide already-read-in metabolite data}
 
 \item{make_plots}{Whether to generate plots for each metabolite and extended output (as provided via the web server)}
+
+\item{save_plots}{Whether to save plots to files}
+
+\item{plot_dir}{Path for saving plots}
 }
 \value{
 Scaling model and variance contribution results

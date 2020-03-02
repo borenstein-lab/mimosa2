@@ -425,7 +425,7 @@ generate_preprocessed_networks = function(database, model_table_file = NULL, pic
 #' @examples
 #' download_reference_data("Sequence variants (ASVs)", "AGORA genomes and models")
 #' @export
-download_reference_data = function(seq_db = get_text("database_choices")[1], target_db = get_text("source_choices")[2], save_to = paste0(getwd(), "/"), source_url = "http://elbo-spice.gs.washington.edu/shiny/MIMOSA2shiny/refData/"){
+download_reference_data = function(seq_db = get_text("database_choices")[1], target_db = get_text("source_choices")[2], save_to = paste0(getwd(), "/"), source_url = "http://elbo-spice.cs.tau.ac.il/shiny/MIMOSA2shiny/refData/"){
   if(grepl("AGORA", target_db, ignore.case = T)){
     target1 = "AGORA"
   } else if(grepl("EMBL", target_db, ignore.case = T)){

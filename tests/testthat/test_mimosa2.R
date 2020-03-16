@@ -422,19 +422,19 @@ test_that("Greengenes OTUs -> AGORA species, KEGG add", {
 # })
 # 
 # 
-# test_that("Metagenome option works", {
-#   config1 = fread(test_config_file1, header = F, fill = T)
-#   config1[V1=="file1_type", V2:=get_text("database_choices")[4]]
-#   config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
-#   config1[V1 == "file1", V2:="test_metagenome.txt"]
-#   #config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_metagenome.txt", get_text("metagenome_options")[1])))
-#   config1[V1=="file2", V2:="test_metagenome_mets.txt"]
-#   config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
-#   test_results_normal(config1, file_prefix = "test_metagenome")
-#   config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
-#   test_results_normal(config1, "test_seq_agora_rank")
-#   
-# })
+test_that("Metagenome option works", {
+  config1 = fread(test_config_file1, header = F, fill = T)
+  config1[V1=="file1_type", V2:=get_text("database_choices")[4]]
+  config1[V1=="ref_choices", V2:=get_text("source_choices")[1]]
+  config1[V1 == "file1", V2:="test_metagenome.txt"]
+  #config1 = rbind(config1, data.table(V1=c("metagenome", "metagenome_format"), V2 = c("test_metagenome.txt", get_text("metagenome_options")[1])))
+  config1[V1=="file2", V2:="test_metagenome_mets.txt"]
+  config1[V1=="netAdd", V2:="test_netAdd_rxns_KEGG.txt"]
+  test_results_normal(config1, file_prefix = "test_metagenome")
+  config1 = rbind(config1, data.table(V1 = "rankBased", V2 = T))
+  test_results_normal(config1, "test_seq_agora_rank")
+
+})
 # 
 
 # test_that("Rank contribution timing", {

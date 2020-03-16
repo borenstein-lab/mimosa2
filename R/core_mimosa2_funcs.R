@@ -2022,8 +2022,8 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     cmp_mods[[1]][,compound:=as.character(compound)]
     indiv_cmps[,compound:=as.character(compound)]
     
-    cmp_mods[,MetaboliteName:=met_names(as.character(compound))]
-    cmp_mods[is.na(MetaboliteName), MetaboliteName:=compound]
+    cmp_mods[[1]][,MetaboliteName:=met_names(as.character(compound))]
+    cmp_mods[[1]][is.na(MetaboliteName), MetaboliteName:=compound]
     
     if(!is.null(var_shares)){
       var_shares[,compound:=as.character(compound)]

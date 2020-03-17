@@ -1308,6 +1308,10 @@ build_metabolic_model = function(species, config_table, netAdd = NULL, manual_ag
         #Get network from metagenome KOs
         if(config_table[V1=="file1_type", V2==get_text("database_choices")[4]]){
           species = species[rowSums(species[,names(species) != "KO", with=F]) != 0]
+          if(!file.exists(config_table[V1=="kegg_prefix", V2], "/network_template.txt")){
+            stop(paste0("KEGG KO-Rxn Network not found in the specified location: ", config_table[V1=="kegg_prefix", V2], 
+                        "/network_template.txt", "\n If you have not previously generated this file, please run generate_network_template_kegg() and place the resulting network_template.txt file in a directory named KEGG in your data_prefix path."))
+          }
           network_template = fread(paste0(config_table[V1=="kegg_prefix", V2], "/network_template.txt")) ##generate_network_template_kegg(kegg_paths[1], all_kegg = kegg_paths[2:3], write_out = F)
           network = generate_genomic_network(species[,unique(KO)], keggSource = "KeggTemplate", degree_filter = 0, rxn_table = network_template, return_mats = F)
         } else {

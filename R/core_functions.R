@@ -303,7 +303,7 @@ generate_network_template_kegg = function(mapformula_file, all_kegg, write_out =
   rxn_table[,stoichReac:=stoichReac]
   rxn_table[,stoichProd:=stoichProd]
   rxn_table[,Path:=gsub(" ","",Path)]
-  if(write_out) write.table(rxn_table, file = "full_network_template_all_info.txt", quote=F, row.names = F, sep = "\t")
+  if(write_out) write.table(rxn_table, file = "network_template.txt", quote=F, row.names = F, sep = "\t")
   return(rxn_table)
 }
 

@@ -2017,7 +2017,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     }
     #Rxns, taxa summary
     cat("Summarizing results\n")
-    cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = F, kos_only = no_spec_param, humann2 = humann2_param, 
+    cmp_summary = get_cmp_summary(species, network, normalize = !rxn_param, manual_agora = agora_param, kos_only = no_spec_param, humann2 = humann2_param, 
                                   met_subset = cmp_mods[[1]][!is.na(Rsq) & Rsq != 0,compound], contrib_sizes = var_shares)
     cmp_mods[[1]] = merge(cmp_mods[[1]], cmp_summary$CompLevelSummary, by = "compound", all.x = T)
     #Add species/rxn info

@@ -37,6 +37,8 @@ met_table_fix = function(met_table, nzero_filt = 5){
   met_col_name = names(met_table)[names(met_table) %in% c("compound", "KEGG", "Compound", "metabolite", "Metabolite")]
   if(length(met_col_name) != 1) stop("Ambiguous metabolite ID column name, must be one of: Compound/compound/KEGG/Metabolite/metabolite")
   setnames(met_table, met_col_name, "compound")
+  #Remove any rows with NA KEGG ID
+  met_table = met_table[!is.na(compound)]
   #Set NAs to 0
   for(j in names(met_table)){
     set(met_table ,which(is.na(met_table[[j]])),j,0)
@@ -45,7 +47,7 @@ met_table_fix = function(met_table, nzero_filt = 5){
     return(length(x[x != 0]) >= nzero_filt)
   })]
   if(any(duplicated(met_table[,compound]))){ #Deal with duplicated features
-    dup_mets = met_table[duplicated(compound), compound]
+    dup_mets = met_table[duplicated(compound), unique(compound)]
     for(k in 1:length(dup_mets)){
       dup_rows = met_table[,which(compound==dup_mets[k])]
       met_table = met_table[-dup_rows[2:length(dup_rows)]] #Remove rows

@@ -423,11 +423,11 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
   #Option to merge low abundance species
   if(length(species_merge) > 1){ #Merge low abundance species into "Rare/Low-abundance"
     cat(paste0("Merging ", length(species_merge), " taxa for contributor analysis\n"))
-    species_contribution_table[,NewSpecies:=ifelse(Species %in% species_merge, "Rare/Low-abundance", Species)]
+    species_contribution_table[,NewSpecies:=ifelse(Species %in% species_merge, "Rare/Low-abundance", as.character(Species))]
     species_contribution_table = species_contribution_table[,sum(CMP), by=list(compound, NewSpecies, Sample)]
     setnames(species_contribution_table, c("V1", "NewSpecies"), c("CMP", "Species"))
   }
-  
+
   if(!"rankBased" %in% config_table[,V1]){
     #Add residuals here
     species_contribution_table = add_residuals(species_contribution_table, model_dat = model_results[[1]], 
@@ -1392,6 +1392,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     network[is.na(stoichReac), stoichReac:=0] #solve NA problem
     network[is.na(stoichProd), stoichProd:=0]
     spec_list = species_table[,unique(OTU)]
+    #print(spec_list)
     species_table[,OTU:=as.character(OTU)]
     network[,OTU:=as.character(OTU)]
     if(!humann2) species_table = melt(species_table, id.var = "OTU", variable.name = "Sample") else {
@@ -1463,7 +1464,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       spec_cmps[,value:=NULL]
       #Value might be different if copy number was previously incorporated
       spec_cmps = spec_cmps[,sum(CMP), by=list(Species, Sample, compound)]
-      
+      #print(spec_cmps)
       #spec_cmps = spec_cmps[,list(sum(CMP), sum(NumSynthGenes), sum(NumSynthSpecies), sum(NumSynthSpecGenes), sum(NumDegGenes), sum(NumDegSpecies), sum(NumDegSpecGenes)), by=list(Species, Sample, compound)]
       #setnames(spec_cmps, c("V1", "V2", "V3", "V4", "V5", "V6", "V7"), c("CMP", "NumSynthGenes", "NumSynthSpecies", "NumSynthSpecGenes", "NumDegGenes", "NumDegSpecies", "NumDegSpecGenes"))
       setnames(spec_cmps, "V1", "CMP")

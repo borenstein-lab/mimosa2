@@ -2281,6 +2281,25 @@ map_to_kegg = function(met_table){
   return(met_table)
 }
 
+#' Convert metabolite name table to KEGG metabolite table, using webchem package (fewer installation issues than MetaboAnalystR)
+#'
+#' @import data.table
+#' @param met_table Table of metabolite abundances
+#' @return A new table of metabolite abundances using KEGG compound IDs
+#' @examples
+#' new_mets = map_to_kegg(mets)
+#' @export
+map_to_kegg_webchem = function(met_table){
+  cmpds = met_table[,compound]
+  match_table = data.table(compound = cmpds, KEGG = webchem::cts_convert(cmpds, from = "Chemical Name", to = "KEGG", first = T))
+  num_nas = nrow(match_table[is.na(KEGG)|KEGG=="NA"])
+  if(num_nas > 0) warning(paste0(num_nas, " metabolites were not matched to KEGG IDs and will be ignored"))
+  met_table = merge(met_table, match_table[,list(Compound, KEGG)], by = "compound", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
+  met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
+  setnames(met_table, "KEGG", "compound")
+  return(met_table)
+}
+
 #' Run toy analysis to test package installation
 #'
 #' @param test_vsearch Whether to test installation of vsearch

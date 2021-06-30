@@ -980,8 +980,8 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
   resid_dat = unique(varShares[,list(metID, Rsq, PosNeg)])
   met_order = resid_dat[order(Rsq, decreasing = F), metID]
   varShares = varShares[metID %in% met_order]
-  varShares[,metID:=factor(metID, levels = met_order)]
-  
+  varShares[,metID:=factor(metID, levels = rev(met_order))]
+  resid_dat[,metID:=factor(metID, levels = rev(met_order))]
   
   if(include_rsq){
     resid_plot = ggplot(resid_dat, aes(x=metID, y = Rsq)) + geom_bar(stat = "identity") + scale_y_continuous(expand = c(0,0))+ theme_minimal() +

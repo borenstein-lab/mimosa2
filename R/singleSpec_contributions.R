@@ -85,15 +85,15 @@ cmp_species_contributions = function(j, cmps_sub_good, all_rxns, subjects, norm_
 #' @export
 cmp_species_contributions_picrust = function(j, cmps_sub_good, all_rxns, subjects, norm_kos, ko_net, all_taxa, single_spec_cmps, cor_with=T, comparison = "cmps", met_data = ""){
   if(!is.null(all_rxns[[j]])){
-    compound = cmps_sub_good[j,compound]
+    comp = cmps_sub_good[j,compound]
     kos_involved = unique(all_rxns[[j]][Reversible==0,KO])
       if(cor_with){
         if(comparison == "cmps"){
           species_cmp_cors = sapply(1:length(all_taxa), function(x){
-            if(nrow(cmps_sub_good[compound]) > 1){stop("Duplicate metabolite IDs, please fix")}
+            if(nrow(cmps_sub_good[comp]) > 1){stop("Duplicate metabolite IDs, please fix")}
             if(!identical(single_spec_cmps[[x]], NA)){
-              if(compound %in% single_spec_cmps[[x]][,compound]){
-                return(try(cor(as.vector(unlist(cmps_sub_good[compound,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][compound,subjects,with=F])), method="pearson", use = "complete.obs")))
+              if(comp %in% single_spec_cmps[[x]][,compound]){
+                return(try(cor(as.vector(unlist(cmps_sub_good[comp,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][comp,subjects,with=F])), method="pearson", use = "complete.obs")))
               } else {
                 return(NA)
               }
@@ -105,11 +105,11 @@ cmp_species_contributions_picrust = function(j, cmps_sub_good, all_rxns, subject
           setkey(met_data, "compound")
           species_cmp_cors = sapply(1:length(all_taxa), function(x){
             if(!is.na(single_spec_cmps[[x]])){
-              return(try(cor(as.vector(unlist(met_data[compound,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][compound,subjects,with=F])), method="pearson")))
+              return(try(cor(as.vector(unlist(met_data[comp,subjects,with=F])),as.vector(unlist(single_spec_cmps[[x]][comp,subjects,with=F])), method="pearson")))
             } else { return(NA)}
           })
         }
-        spec_cors = data.table(Species=all_taxa, Cor=species_cmp_cors, compound = compound)
+        spec_cors = data.table(Species=all_taxa, Cor=species_cmp_cors, compound = comp)
         spec_cors[,Pass:=ifelse(Cor > 0.5, 1, 0)]
         return(spec_cors)
       } else {

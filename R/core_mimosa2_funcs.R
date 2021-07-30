@@ -978,15 +978,15 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
   #Order metabolites
   varShares[,PosNeg:=factor(ifelse(Slope > 0, "Positive", "Negative"), levels = c("Positive", "Negative"))]
   resid_dat = unique(varShares[,list(metID, Rsq, PosNeg)])
-  met_order = resid_dat[order(Rsq, decreasing = F), metID]
+  met_order = resid_dat[order(Rsq, decreasing = T), metID]
   varShares = varShares[metID %in% met_order]
-  varShares[,metID:=factor(metID, levels = rev(met_order))]
-  resid_dat[,metID:=factor(metID, levels = rev(met_order))]
+  varShares[,metID:=factor(metID, levels = met_order)]
+  resid_dat[,metID:=factor(metID, levels = met_order)]
   
   if(include_rsq){
     resid_plot = ggplot(resid_dat, aes(x=metID, y = Rsq)) + geom_bar(stat = "identity") + scale_y_continuous(expand = c(0,0))+ theme_minimal() +
       theme(axis.text.x = element_text(angle=90, hjust=0, vjust =0.5), axis.line = element_blank(), axis.title.x = element_blank()) + ylab("Model R-squared") +
-      facet_grid(~PosNeg, scales = "free_x", space = "free_x")
+      facet_grid(~PosNeg, scales = "free_x", space = "free_x") #+ scale_x_discrete(limits = met_order)
   }
   varShares = varShares[Species != "Residual"]
   spec_order = varShares[,length(VarShare[abs(VarShare) > 0.05]), by=Species][order(V1, decreasing = F), Species]
@@ -1003,7 +1003,7 @@ plot_summary_contributions = function(varShares, include_zeros = T, remove_resid
   plot1 = ggplot(varShares, aes(x=metID, y = Species2)) + geom_tile(aes_string(fill = plot_var)) + theme_minimal() +
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust =0.5), axis.line = element_blank(), legend.position = "bottom", legend.text = element_text(size = 7)) +
     scale_fill_gradient2(low = brewer.pal(9,"Reds")[9], mid = "white",  high = brewer.pal(9, "Blues")[9], midpoint = 0, name = color_lab) +
-      ylab("Taxon")+xlab("Metabolite") + facet_grid(~PosNeg, scales = "free_x", space = "free_x")
+      ylab("Taxon")+ xlab("Metabolite") + facet_grid(~PosNeg, scales = "free_x", space = "free_x")
   if(!include_rsq){
     return(plot1)
   } else {

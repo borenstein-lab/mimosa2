@@ -207,14 +207,17 @@ get_kegg_reaction_info = function(kos_to_rxns_method, reaction_info_file = "", s
 #' @examples
 #' generate_network_template_kegg("KEGG/ligand/reaction/reaction_mapformula.lst", all_kegg)
 #' @export
-generate_network_template_kegg = function(mapformula_file, all_kegg, write_out = T){
+generate_network_template_kegg = function(mapformula_file, all_kegg, write_out = T, remove_extra_pathways = T){
   if(is.vector(all_kegg) & length(all_kegg)==2){
     all_kegg = get_kegg_reaction_info(kos_to_rxns_method = all_kegg[1], reaction_info_file = all_kegg[2], save_out = F)
   }
   mapformula = fread(mapformula_file, colClasses = "character", sep = ":") #get mapformula pathway annotations of reactions
   setnames(mapformula, c("Rxn","Path","ReacProd"))
-  #Remove generic path where everything is reversible
+  #Remove generic pathways where everything is reversible
   mapformula = mapformula[Path!=" 01100" & Path != 1100 & Path !="01100"] #If numeric
+  if(remove_extra_pathways){
+    mapformula = mapformula[!Path %in% c(" 01120", 1120, "01120", " 01110", 1110, "01110")]
+  }
   #Process Reacs and Prods, flip reversible reactions, etc
   mapformula[,Reac:=lapply(ReacProd,function(x){ return(unlist(strsplit(x,"="))[1])})]
   mapformula[,Reac:=lapply(Reac, strsplit, " ")]

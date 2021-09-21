@@ -1445,7 +1445,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     all_comps = spec_cmps[,unique(compound)]
     #Option to get abundance scores for each species and rxn
     if(!leave_rxns){
-      if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
+      if((length(intersect(all_comps, kegg_mapping[,met])) > 0) & manual_agora==F){ #If compounds are not KEGG IDs
         #Convert AGORA IDs to KEGG IDs
         spec_cmps[,KEGG:=agora_kegg_mets(compound)]
         spec_cmps = spec_cmps[!is.na(KEGG) & grepl("[e]", compound, fixed = T)] #Going to go for just external stuff
@@ -1477,7 +1477,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       } 
       
     } else {
-      if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
+      if(length(intersect(all_comps, kegg_mapping[,met])) > 2 & manual_agora==F){ #If compounds are not KEGG IDs
         #Convert AGORA IDs to KEGG IDs
         spec_cmps[,KEGG:=agora_kegg_mets(compound)]
         spec_cmps = spec_cmps[!is.na(KEGG) & grepl("[e]", compound, fixed = T)] #Going to go for just external stuff
@@ -1994,6 +1994,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
         indiv_cmps = transform_cmps(indiv_cmps, score_transform)
       }
       indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
+      if(nrow(indiv_cmps) == 0) stop("Unfortunately no metabolites in your dataset were predicted based on metabolic potential. Try an expanded network model or use get_species_cmp_scores() to obtain CMP scores without comparing.")
       cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
     }
     #indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])

@@ -4,12 +4,15 @@
 \alias{generate_preprocessed_networks}
 \title{Generate preprocessed reference databases for MIMOSA2}
 \usage{
-generate_preprocessed_networks(database, model_table_file = NULL,
+generate_preprocessed_networks(
+  database,
+  model_table_file = NULL,
   picrust_ko_path = "data/picrustGenomeData/",
-  kegg_paths = c("data/KEGG/reaction_mapformula.lst",
-  "data/KEGG/reaction_ko.list", "data/KEGG/reaction"),
-  dat_path = paste0("data/", database, "/"), out_path = paste0("data/",
-  database, "/RxnNetworks/"))
+  kegg_paths = c("data/KEGG/reaction_mapformula.lst", "data/KEGG/reaction_ko.list",
+    "data/KEGG/reaction"),
+  dat_path = paste0("data/", database, "/"),
+  out_path = paste0("data/", database, "/RxnNetworks/")
+)
 }
 \arguments{
 \item{database}{One of "KEGG", "picrustGG", "AGORA", or "embl_gems"}

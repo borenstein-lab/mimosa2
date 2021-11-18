@@ -4,8 +4,11 @@
 \alias{get_rep_seqs_from_otus}
 \title{Returns representative 16S sequences for a set of closed-reference OTU IDs}
 \usage{
-get_rep_seqs_from_otus(otus, database = database_choices[2],
-  rep_seq_path = "data/rep_seqs/")
+get_rep_seqs_from_otus(
+  otus,
+  database = database_choices[2],
+  rep_seq_path = "data/rep_seqs/"
+)
 }
 \arguments{
 \item{otus}{List of OTU IDs}

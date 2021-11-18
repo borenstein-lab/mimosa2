@@ -4,9 +4,19 @@
 \alias{cmp_species_contributions_picrust}
 \title{Evaluate species contributors for a single metabolite with OTU and PICRUSt data, typically called by get_spec_contribs}
 \usage{
-cmp_species_contributions_picrust(j, cmps_sub_good, all_rxns, subjects,
-  norm_kos, ko_net, all_taxa, single_spec_cmps, cor_with = T,
-  comparison = "cmps", met_data = "")
+cmp_species_contributions_picrust(
+  j,
+  cmps_sub_good,
+  all_rxns,
+  subjects,
+  norm_kos,
+  ko_net,
+  all_taxa,
+  single_spec_cmps,
+  cor_with = T,
+  comparison = "cmps",
+  met_data = ""
+)
 }
 \arguments{
 \item{j}{metabolite ID # (usually from lapply/sapply)}

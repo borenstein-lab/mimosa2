@@ -4,11 +4,16 @@
 \alias{run_mimosa1}
 \title{Run full MIMOSA1 analysis (2019)}
 \usage{
-run_mimosa1(species, mets, species_file = "mimosa1",
+run_mimosa1(
+  species,
+  mets,
+  species_file = "mimosa1",
   picrust_file_paths = c("data/picrustGenomeData/16S_13_5_precalculated.tab.gz",
-  "data/picrustGenomeData/indivGenomes/", "_genomic_content.tab"),
-  rxn_path = "data/KEGG/full_rxn_table.txt", simulated = F,
-  config_table = NULL)
+    "data/picrustGenomeData/indivGenomes/", "_genomic_content.tab"),
+  rxn_path = "data/KEGG/full_rxn_table.txt",
+  simulated = F,
+  config_table = NULL
+)
 }
 \arguments{
 \item{species}{processed species table}

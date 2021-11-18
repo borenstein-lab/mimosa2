@@ -4,10 +4,18 @@
 \alias{plot_contributions}
 \title{Plot species contributions for a single metabolite}
 \usage{
-plot_contributions(varShares, metabolite, metIDcol = "metID",
-  include_zeros = F, include_residual = F, merge_threshold = 0.02,
-  spec_threshold = 10, color_palette = NULL, order_spec = T,
-  taxa_max = 15)
+plot_contributions(
+  varShares,
+  metabolite,
+  metIDcol = "metID",
+  include_zeros = F,
+  include_residual = F,
+  merge_threshold = 0.02,
+  spec_threshold = 10,
+  color_palette = NULL,
+  order_spec = T,
+  taxa_max = 15
+)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}

@@ -4,8 +4,11 @@
 \alias{get_subset_picrust_ko_table}
 \title{Returns the melted picrust ko table corresponding to the given set of OTUs}
 \usage{
-get_subset_picrust_ko_table(otus, picrust_ko_table_directory,
-  picrust_ko_table_suffix)
+get_subset_picrust_ko_table(
+  otus,
+  picrust_ko_table_directory,
+  picrust_ko_table_suffix
+)
 }
 \arguments{
 \item{otus}{List of OTUs to find genomic content for}

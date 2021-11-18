@@ -298,30 +298,6 @@ blast_seqs = function(seqs, blast_path = "data/blastDB/"){
   return(blast_out)
 }
 
-#' #' Aligns a set of sequences against a database using vsearch
-#' #'
-#' #' @import data.table
-#' #' @param seqs Biostrings object of sequences
-#' #' @param database_path Path to database
-#' #' @return Mapping results
-#' #' @examples
-#' #' vsearch_map_seqs(seqs, database_path = "path")
-#' #' @export
-#' vsearch_map_seqs = function(seqs, database_path = "data/blastDB/"){
-#'   write(seqs, file = "") #Write temp fasta (Biostrings?)
-#'   for(j in 1:length(seqs)){
-#'     system(paste0("vsearch --usearch_global ", seqs[j], " --strand=both --top_hits_only --db=", database_path))
-#'   }
-#'   system("rm temp*") #rm temp fasta
-#'   hits_list = fread("vsearch_out")
-#'   system("rm vsearch_out*") #rm temp fasta
-#'
-#'   return(hits_list)
-#' }
-
-
-
-
 #' Reads metabolic model in Cobra/Matlab format
 #'
 #' @import R.matlab
@@ -333,6 +309,7 @@ blast_seqs = function(seqs, blast_path = "data/blastDB/"){
 getModelInfo = function(matFile){
   return(readMat(matFile)[[1]][,,1])
 }
+
 
 #' Reads a set of AGORA models from Matlab files
 #'
@@ -417,3 +394,25 @@ get_compound_format = function(comp_list){
 }
 
 
+##' #' Aligns a set of sequences against a database using vsearch
+##' #'
+##' #' @import data.table
+##' #' @param seqs Biostrings object of sequences
+##' #' @param database_path Path to database
+##' #' @return Mapping results
+##' #' @examples
+##' #' vsearch_map_seqs(seqs, database_path = "path")
+##' #' @export
+
+
+##' #' vsearch_map_seqs = function(seqs, database_path = "data/blastDB/"){
+##'   write(seqs, file = "") #Write temp fasta (Biostrings?)
+##'   for(j in 1:length(seqs)){
+##'     system(paste0("vsearch --usearch_global ", seqs[j], " --strand=both --top_hits_only --db=", database_path))
+##'   }
+##'   system("rm temp*") #rm temp fasta
+##'   hits_list = fread("vsearch_out")
+##'   system("rm vsearch_out*") #rm temp fasta
+##'
+##'   return(hits_list)
+##' }

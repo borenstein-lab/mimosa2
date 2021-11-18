@@ -4,9 +4,18 @@
 \alias{fit_cmp_net_edit}
 \title{Greedy algorithm to test network improvements /refine rxn network}
 \usage{
-fit_cmp_net_edit(network, species, mets_melt, manual_agora = F,
-  rsq_factor = 1.15, min_rsq = 0.1, min_rxns = 3,
-  max_rxns_test = 40, rank_based = F, species_specific = T)
+fit_cmp_net_edit(
+  network,
+  species,
+  mets_melt,
+  manual_agora = F,
+  rsq_factor = 1.15,
+  min_rsq = 0.1,
+  min_rxns = 3,
+  max_rxns_test = 40,
+  rank_based = F,
+  species_specific = T
+)
 }
 \arguments{
 \item{network}{Edge list reaction table (including reversibility info)}

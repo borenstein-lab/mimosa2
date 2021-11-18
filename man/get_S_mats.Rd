@@ -4,8 +4,13 @@
 \alias{get_S_mats}
 \title{Convert stoichiometric matrix to edge list of reactions}
 \usage{
-get_S_mats(all_mods, species_names, edge_list = F, get_bounds = T,
-  remove_sinks = T)
+get_S_mats(
+  all_mods,
+  species_names,
+  edge_list = F,
+  get_bounds = T,
+  remove_sinks = T
+)
 }
 \arguments{
 \item{all_mods}{List of Cobra-formatted metabolic models}

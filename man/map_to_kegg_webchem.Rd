@@ -2,7 +2,33 @@
 % Please edit documentation in R/core_mimosa2_funcs.R
 \name{map_to_kegg_webchem}
 \alias{map_to_kegg_webchem}
-\title{Convert metabolite name table to KEGG metabolite table, using webchem package (fewer installation issues than MetaboAnalystR)}
+\title{#' Convert metabolite name table to KEGG metabolite table
+#'
+#' @importFrom MetaboAnalystR InitDataObjects
+#' @importFrom MetaboAnalystR Setup.MapData
+#' @importFrom MetaboAnalystR CrossReferencing
+#' @importFrom MetaboAnalystR CreateMappingResultTable
+#' @import data.table
+#' @param met_table Table of metabolite abundances
+#' @return A new table of metabolite abundances using KEGG compound IDs
+#' @examples
+#' new_mets = map_to_kegg(mets)
+#' @export
+map_to_kegg = function(met_table){
+  mSet = InitDataObjects("NA", "utils", FALSE)
+  cmpds = met_table[,compound]
+  mSet = Setup.MapData(mSet, cmpds)
+  mSet = CrossReferencing(mSet, "name", kegg = T)
+  mSet = CreateMappingResultTable(mSet)
+  match_table = data.table(mSet$dataSet$map.table)
+  num_nas = nrow(match_table[is.na(KEGG)|KEGG=="NA"])
+  if(num_nas > 0) warning(paste0(num_nas, " metabolites were not matched to KEGG IDs and will be ignored"))
+  met_table = merge(met_table, match_table[,list(Query, KEGG)], by.x = "compound", by.y = "Query", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
+  met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
+  setnames(met_table, "KEGG", "compound")
+  return(met_table)
+}
+Convert metabolite name table to KEGG metabolite table, using webchem package (fewer installation issues than MetaboAnalystR)}
 \usage{
 map_to_kegg_webchem(met_table)
 }
@@ -13,8 +39,34 @@ map_to_kegg_webchem(met_table)
 A new table of metabolite abundances using KEGG compound IDs
 }
 \description{
+#' Convert metabolite name table to KEGG metabolite table
+#'
+#' @importFrom MetaboAnalystR InitDataObjects
+#' @importFrom MetaboAnalystR Setup.MapData
+#' @importFrom MetaboAnalystR CrossReferencing
+#' @importFrom MetaboAnalystR CreateMappingResultTable
+#' @import data.table
+#' @param met_table Table of metabolite abundances
+#' @return A new table of metabolite abundances using KEGG compound IDs
+#' @examples
+#' new_mets = map_to_kegg(mets)
+#' @export
+map_to_kegg = function(met_table){
+  mSet = InitDataObjects("NA", "utils", FALSE)
+  cmpds = met_table[,compound]
+  mSet = Setup.MapData(mSet, cmpds)
+  mSet = CrossReferencing(mSet, "name", kegg = T)
+  mSet = CreateMappingResultTable(mSet)
+  match_table = data.table(mSet$dataSet$map.table)
+  num_nas = nrow(match_table[is.na(KEGG)|KEGG=="NA"])
+  if(num_nas > 0) warning(paste0(num_nas, " metabolites were not matched to KEGG IDs and will be ignored"))
+  met_table = merge(met_table, match_table[,list(Query, KEGG)], by.x = "compound", by.y = "Query", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
+  met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
+  setnames(met_table, "KEGG", "compound")
+  return(met_table)
+}
 Convert metabolite name table to KEGG metabolite table, using webchem package (fewer installation issues than MetaboAnalystR)
 }
 \examples{
-new_mets = map_to_kegg(mets)
+new_mets = map_to_kegg_webchem(mets)
 }

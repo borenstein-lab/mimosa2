@@ -4,8 +4,17 @@
 \alias{get_analysis_summary}
 \title{Calculate general summary statistics on the results of a MIMOSA analysis}
 \usage{
-get_analysis_summary(input_species, species, mets, network, indiv_cmps,
-  cmp_mods, var_shares, config_table, pval_threshold = 0.1)
+get_analysis_summary(
+  input_species,
+  species,
+  mets,
+  network,
+  indiv_cmps,
+  cmp_mods,
+  var_shares,
+  config_table,
+  pval_threshold = 0.1
+)
 }
 \arguments{
 \item{species}{}

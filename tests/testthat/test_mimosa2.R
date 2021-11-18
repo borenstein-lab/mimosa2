@@ -63,8 +63,8 @@ test_ref_results_normal = function(config_table, file_prefix, make_plots = F){
   # }
   
   if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
-    expect_warning(map_to_kegg(mets))
-    mets = map_to_kegg(mets)
+    expect_warning(map_to_kegg_webchem(mets))
+    mets = map_to_kegg_webchem(mets)
     expect_equal(get_compound_format(mets[,compound]), "KEGG")
   }
 

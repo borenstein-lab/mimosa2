@@ -4,8 +4,12 @@
 \alias{filter_species_abunds}
 \title{Filter species found in few samples and/or low abundance}
 \usage{
-filter_species_abunds(species_dat, filter_type = "mean",
-  minMeanAbund = 0, minSampFrac = 0)
+filter_species_abunds(
+  species_dat,
+  filter_type = "mean",
+  minMeanAbund = 0,
+  minSampFrac = 0
+)
 }
 \arguments{
 \item{species_dat}{OTU table}

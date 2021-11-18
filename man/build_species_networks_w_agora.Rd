@@ -6,8 +6,13 @@
 June 2018
 Finds close AGORA models and then imports those for each species. Builds PICRUSt-based network for remaining species}
 \usage{
-build_species_networks_w_agora(mod_list, usePreprocessed = T,
-  agora_path = "data/AGORA/", remove_sinks = T, add_rev = T)
+build_species_networks_w_agora(
+  mod_list,
+  usePreprocessed = T,
+  agora_path = "data/AGORA/",
+  remove_sinks = T,
+  add_rev = T
+)
 }
 \arguments{
 \item{usePreprocessed}{Whether to process .mat files or use pre-computed versions}

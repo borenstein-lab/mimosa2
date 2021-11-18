@@ -1445,7 +1445,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
     all_comps = spec_cmps[,unique(compound)]
     #Option to get abundance scores for each species and rxn
     if(!leave_rxns){
-      if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
+      if((length(intersect(all_comps, kegg_mapping[,met])) > 0) & manual_agora==F){ #If compounds are not KEGG IDs
         #Convert AGORA IDs to KEGG IDs
         spec_cmps[,KEGG:=agora_kegg_mets(compound)]
         spec_cmps = spec_cmps[!is.na(KEGG) & grepl("[e]", compound, fixed = T)] #Going to go for just external stuff
@@ -1477,7 +1477,7 @@ get_species_cmp_scores = function(species_table, network, normalize = T, relAbun
       } 
       
     } else {
-      if(length(intersect(all_comps, kegg_mapping[,KEGG])) < 2 & manual_agora==F){ #If compounds are not KEGG IDs
+      if(length(intersect(all_comps, kegg_mapping[,met])) > 2 & manual_agora==F){ #If compounds are not KEGG IDs
         #Convert AGORA IDs to KEGG IDs
         spec_cmps[,KEGG:=agora_kegg_mets(compound)]
         spec_cmps = spec_cmps[!is.na(KEGG) & grepl("[e]", compound, fixed = T)] #Going to go for just external stuff
@@ -1913,7 +1913,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     
     if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
       cat("Mapping metabolite names to KEGG IDs\n")
-      mets = map_to_kegg(mets)
+      mets = map_to_kegg_webchem(mets)
     }
     #Get CMP scores
     if("rxnEdit" %in% config_table[,V1]){
@@ -1994,6 +1994,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
         indiv_cmps = transform_cmps(indiv_cmps, score_transform)
       }
       indiv_cmps = indiv_cmps[compound %in% mets[,compound]]
+      if(nrow(indiv_cmps) == 0) stop("Unfortunately no metabolites in your dataset were predicted based on metabolic potential. Try an expanded network model or use get_species_cmp_scores() to obtain CMP scores without comparing.")
       cmp_mods = fit_cmp_mods(indiv_cmps, mets_melt, rank_based = rank_based, rank_type = rank_type)
     }
     #indiv_cmps = add_residuals(indiv_cmps, cmp_mods[[1]], cmp_mods[[2]])
@@ -2254,32 +2255,32 @@ map_seqvar = function(seqs, repSeqDir = "data/AGORA/", repSeqFile = "agora_NCBI_
   }
 }
 
-#' Convert metabolite name table to KEGG metabolite table
-#'
-#' @importFrom MetaboAnalystR InitDataObjects
-#' @importFrom MetaboAnalystR Setup.MapData
-#' @importFrom MetaboAnalystR CrossReferencing
-#' @importFrom MetaboAnalystR CreateMappingResultTable
-#' @import data.table
-#' @param met_table Table of metabolite abundances
-#' @return A new table of metabolite abundances using KEGG compound IDs
-#' @examples
-#' new_mets = map_to_kegg(mets)
-#' @export
-map_to_kegg = function(met_table){
-  mSet = InitDataObjects("NA", "utils", FALSE)
-  cmpds = met_table[,compound]
-  mSet = Setup.MapData(mSet, cmpds)
-  mSet = CrossReferencing(mSet, "name", kegg = T)
-  mSet = CreateMappingResultTable(mSet)
-  match_table = data.table(mSet$dataSet$map.table)
-  num_nas = nrow(match_table[is.na(KEGG)|KEGG=="NA"])
-  if(num_nas > 0) warning(paste0(num_nas, " metabolites were not matched to KEGG IDs and will be ignored"))
-  met_table = merge(met_table, match_table[,list(Query, KEGG)], by.x = "compound", by.y = "Query", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
-  met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
-  setnames(met_table, "KEGG", "compound")
-  return(met_table)
-}
+#' #' Convert metabolite name table to KEGG metabolite table
+#' #'
+#' #' @importFrom MetaboAnalystR InitDataObjects
+#' #' @importFrom MetaboAnalystR Setup.MapData
+#' #' @importFrom MetaboAnalystR CrossReferencing
+#' #' @importFrom MetaboAnalystR CreateMappingResultTable
+#' #' @import data.table
+#' #' @param met_table Table of metabolite abundances
+#' #' @return A new table of metabolite abundances using KEGG compound IDs
+#' #' @examples
+#' #' new_mets = map_to_kegg(mets)
+#' #' @export
+#' map_to_kegg = function(met_table){
+#'   mSet = InitDataObjects("NA", "utils", FALSE)
+#'   cmpds = met_table[,compound]
+#'   mSet = Setup.MapData(mSet, cmpds)
+#'   mSet = CrossReferencing(mSet, "name", kegg = T)
+#'   mSet = CreateMappingResultTable(mSet)
+#'   match_table = data.table(mSet$dataSet$map.table)
+#'   num_nas = nrow(match_table[is.na(KEGG)|KEGG=="NA"])
+#'   if(num_nas > 0) warning(paste0(num_nas, " metabolites were not matched to KEGG IDs and will be ignored"))
+#'   met_table = merge(met_table, match_table[,list(Query, KEGG)], by.x = "compound", by.y = "Query", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
+#'   met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
+#'   setnames(met_table, "KEGG", "compound")
+#'   return(met_table)
+#' }
 
 #' Convert metabolite name table to KEGG metabolite table, using webchem package (fewer installation issues than MetaboAnalystR)
 #'
@@ -2287,14 +2288,43 @@ map_to_kegg = function(met_table){
 #' @param met_table Table of metabolite abundances
 #' @return A new table of metabolite abundances using KEGG compound IDs
 #' @examples
-#' new_mets = map_to_kegg(mets)
+#' new_mets = map_to_kegg_webchem(mets)
 #' @export
 map_to_kegg_webchem = function(met_table){
   cmpds = met_table[,compound]
-  match_table = data.table(compound = cmpds, KEGG = webchem::cts_convert(cmpds, from = "Chemical Name", to = "KEGG", first = T))
+  match_table = data.table(compound = cmpds, KEGG = sapply(cmpds, function(x){ 
+    webchem::cts_convert(x, from = "Chemical Name", to = "KEGG", first = T)[[1]][1]
+    }))
   num_nas = nrow(match_table[is.na(KEGG)|KEGG=="NA"])
   if(num_nas > 0) warning(paste0(num_nas, " metabolites were not matched to KEGG IDs and will be ignored"))
-  met_table = merge(met_table, match_table[,list(Compound, KEGG)], by = "compound", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
+  if(nrow(match_table[!is.na(KEGG) & KEGG != "NA"]) == 0){
+    stop("No metabolite names could be mapped to KEGG IDs. Please check the formatting of your metabolite name column. Alternatively, there may be a current issue with the Chemical Translation Service server.")
+  }
+  met_table = merge(met_table, match_table[,list(compound, KEGG)], by = "compound", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
+  met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
+  setnames(met_table, "KEGG", "compound")
+  return(met_table)
+}
+
+#' Convert metabolite table of HMDB IDs to to KEGG metabolite table, using webchem package (fewer installation issues than MetaboAnalystR)
+#'
+#' @import data.table
+#' @param met_table Table of metabolite abundances
+#' @return A new table of metabolite abundances using KEGG compound IDs
+#' @examples
+#' new_mets = map_hmdb_to_kegg_webchem(mets)
+#' @export
+map_hmdb_to_kegg_webchem = function(met_table){
+  cmpds = met_table[,compound]
+  match_table = data.table(compound = cmpds, KEGG = sapply(cmpds, function(x){ 
+    webchem::cts_convert(x, from = "human metabolome database", to = "KEGG", first = T)[[1]][1]
+  }))
+  num_nas = nrow(match_table[is.na(KEGG)|KEGG=="NA"])
+  if(num_nas > 0) warning(paste0(num_nas, " metabolites were not matched to KEGG IDs and will be ignored"))
+  if(nrow(match_table[!is.na(KEGG) & KEGG != "NA"]) == 0){
+    stop("No HMDB IDs could be mapped to KEGG IDs. Please check the formatting of your metabolite ID column. Alternatively, there may be a current issue with the Chemical Translation Service server.")
+  }
+  met_table = merge(met_table, match_table[,list(compound, KEGG)], by = "compound", all.x = T)[!is.na(KEGG) & KEGG != "NA"]
   met_table = met_table[,lapply(.SD, sum), by=KEGG, .SDcols = names(met_table)[!names(met_table) %in% c("compound", "KEGG")]]
   setnames(met_table, "KEGG", "compound")
   return(met_table)

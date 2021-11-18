@@ -9,8 +9,6 @@ make_network_matrix(rxn_table)
 make_network_matrix(rxn_table)
 }
 \arguments{
-\item{rxn_table}{Edge list format of network, as from 3rd output of generate_genomic_network}
-
 \item{rxn_table}{edge list network}
 }
 \value{

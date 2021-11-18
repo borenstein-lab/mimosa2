@@ -4,9 +4,16 @@
 \alias{calculate_var_shares}
 \title{Wrapper function to calculate contributions to variance, specific method depends on configuration}
 \usage{
-calculate_var_shares(species_contribution_table, met_table, model_results,
-  config_table, valueVar = "newValue", species_merge = NULL,
-  signif_threshold = 0.2, add_summary = T)
+calculate_var_shares(
+  species_contribution_table,
+  met_table,
+  model_results,
+  config_table,
+  valueVar = "newValue",
+  species_merge = NULL,
+  signif_threshold = 0.2,
+  add_summary = T
+)
 }
 \arguments{
 \item{species_contribution_table}{Table of species contributions (with residuals)}

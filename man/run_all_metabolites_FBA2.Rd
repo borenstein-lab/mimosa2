@@ -4,9 +4,18 @@
 \alias{run_all_metabolites_FBA2}
 \title{Run full MIMOSA1 analysis on simulation data (2019)}
 \usage{
-run_all_metabolites_FBA2(run_prefix, fake_spec, fake_mets, network,
-  spec_codes, cor_method = "spearman", correction = "fdr",
-  nperm = 10000, nonzero_filter = 4, kegg_translate = "")
+run_all_metabolites_FBA2(
+  run_prefix,
+  fake_spec,
+  fake_mets,
+  network,
+  spec_codes,
+  cor_method = "spearman",
+  correction = "fdr",
+  nperm = 10000,
+  nonzero_filter = 4,
+  kegg_translate = ""
+)
 }
 \arguments{
 \item{run_prefix}{}

@@ -4,9 +4,18 @@
 \alias{get_species_cmp_scores}
 \title{Updated version of getting all single-species CMP scores for every compound and taxon}
 \usage{
-get_species_cmp_scores(species_table, network, normalize = T,
-  relAbund = T, manual_agora = F, humann2 = F, leave_rxns = F,
-  kos_only = F, remove_rev = T, fill_zeros = T)
+get_species_cmp_scores(
+  species_table,
+  network,
+  normalize = T,
+  relAbund = T,
+  manual_agora = F,
+  humann2 = F,
+  leave_rxns = F,
+  kos_only = F,
+  remove_rev = T,
+  fill_zeros = T
+)
 }
 \arguments{
 \item{species_table}{OTU abundance table (wide format)}

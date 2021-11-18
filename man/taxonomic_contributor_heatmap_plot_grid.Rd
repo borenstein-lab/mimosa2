@@ -4,8 +4,11 @@
 \alias{taxonomic_contributor_heatmap_plot_grid}
 \title{Make plot of individual metabolites and their taxonomic contributors}
 \usage{
-taxonomic_contributor_heatmap_plot_grid(node_data, node_data_spec,
-  prediction_colors = c("#1B9E77", "lightgrey", "#F46D43"))
+taxonomic_contributor_heatmap_plot_grid(
+  node_data,
+  node_data_spec,
+  prediction_colors = c("#1B9E77", "lightgrey", "#F46D43")
+)
 }
 \arguments{
 \item{node_data}{Table of core MIMOSA results}

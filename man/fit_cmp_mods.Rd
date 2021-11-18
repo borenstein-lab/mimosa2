@@ -4,8 +4,14 @@
 \alias{fit_cmp_mods}
 \title{Fits model scaling total CMPs to metabolite concentrations}
 \usage{
-fit_cmp_mods(species_cmps, mets_melt, rank_based = F,
-  rank_type = "Rfit", cmp_nonzero_min = 4, FDRcorrect = T)
+fit_cmp_mods(
+  species_cmps,
+  mets_melt,
+  rank_based = F,
+  rank_type = "Rfit",
+  cmp_nonzero_min = 4,
+  FDRcorrect = T
+)
 }
 \arguments{
 \item{species_cmps}{Table of species contribution abundances}

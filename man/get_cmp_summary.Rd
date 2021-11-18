@@ -4,9 +4,19 @@
 \alias{get_cmp_summary}
 \title{Get summary of CMP score basis across all samples}
 \usage{
-get_cmp_summary(species_table, network, normalize = T, relAbund = T,
-  manual_agora = F, humann2 = F, kos_only = F, remove_rev = T,
-  met_subset = NULL, contrib_sizes = NULL, return_var_shares = T)
+get_cmp_summary(
+  species_table,
+  network,
+  normalize = T,
+  relAbund = T,
+  manual_agora = F,
+  humann2 = F,
+  kos_only = F,
+  remove_rev = T,
+  met_subset = NULL,
+  contrib_sizes = NULL,
+  return_var_shares = T
+)
 }
 \arguments{
 \item{species_table}{OTU abundance table (wide format)}

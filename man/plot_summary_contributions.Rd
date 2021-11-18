@@ -4,8 +4,13 @@
 \alias{plot_summary_contributions}
 \title{Plot summary of metabolite-species contributions}
 \usage{
-plot_summary_contributions(varShares, include_zeros = T,
-  remove_resid_rescale = F, met_id_col = "metID", include_rsq = T)
+plot_summary_contributions(
+  varShares,
+  include_zeros = T,
+  remove_resid_rescale = F,
+  met_id_col = "metID",
+  include_rsq = T
+)
 }
 \arguments{
 \item{varShares}{Dataset of contributions}

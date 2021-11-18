@@ -4,8 +4,11 @@
 \alias{get_genomic_content_from_picrust_table}
 \title{Returns the column from the picrust tables that corresponds to the genomic content of the indicated OTU}
 \usage{
-get_genomic_content_from_picrust_table(otu, picrust_ko_table_directory,
-  picrust_ko_table_suffix)
+get_genomic_content_from_picrust_table(
+  otu,
+  picrust_ko_table_directory,
+  picrust_ko_table_suffix
+)
 }
 \arguments{
 \item{otu}{OTU ID}

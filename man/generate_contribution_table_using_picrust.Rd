@@ -4,9 +4,14 @@
 \alias{generate_contribution_table_using_picrust}
 \title{Uses the provided OTU table to generate a contribution table based on the PICRUSt 16S normalization and genomic content tables}
 \usage{
-generate_contribution_table_using_picrust(otu_table, picrust_norm_file,
-  picrust_ko_table_directory, picrust_ko_table_suffix,
-  copynum_column = F, otu_rel_abund = T)
+generate_contribution_table_using_picrust(
+  otu_table,
+  picrust_norm_file,
+  picrust_ko_table_directory,
+  picrust_ko_table_suffix,
+  copynum_column = F,
+  otu_rel_abund = T
+)
 }
 \arguments{
 \item{otu_table}{OTU/seq table}

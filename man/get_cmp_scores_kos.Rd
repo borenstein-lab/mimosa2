@@ -4,8 +4,14 @@
 \alias{get_cmp_scores_kos}
 \title{Updated version of getting all sample-level CMP scores from a KO abundance table}
 \usage{
-get_cmp_scores_kos(ko_table, network, normalize = T, relAbund = T,
-  remove_rev = T, leave_rxns = F)
+get_cmp_scores_kos(
+  ko_table,
+  network,
+  normalize = T,
+  relAbund = T,
+  remove_rev = T,
+  leave_rxns = F
+)
 }
 \arguments{
 \item{ko_table}{KO abundance table (wide format)}

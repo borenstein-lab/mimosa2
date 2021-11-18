@@ -4,8 +4,17 @@
 \alias{cmp_species_contributions}
 \title{Evaluate species contributors for a single metabolite with qPCR/species abundance data}
 \usage{
-cmp_species_contributions(j, cmps_sub_good, all_rxns, subjects, norm_kos,
-  ko_net, spec_abunds, ref_kos, cor_with = T)
+cmp_species_contributions(
+  j,
+  cmps_sub_good,
+  all_rxns,
+  subjects,
+  norm_kos,
+  ko_net,
+  spec_abunds,
+  ref_kos,
+  cor_with = T
+)
 }
 \arguments{
 \item{j}{metabolite # (usually from lapply/sapply)}

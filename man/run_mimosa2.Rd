@@ -4,8 +4,14 @@
 \alias{run_mimosa2}
 \title{Run a MIMOSA 2 analysis}
 \usage{
-run_mimosa2(config_table, species = "", mets = "", make_plots = F,
-  save_plots = F, plot_dir = "mimosa2plots")
+run_mimosa2(
+  config_table,
+  species = "",
+  mets = "",
+  make_plots = F,
+  save_plots = F,
+  plot_dir = "mimosa2plots"
+)
 }
 \arguments{
 \item{config_table}{Data.table of input files and settings for MIMOSA analysis OR path to such a table}

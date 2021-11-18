@@ -4,9 +4,18 @@
 \alias{var_shares_cmps}
 \title{Get variance share contributions to CMP scores for all compounds}
 \usage{
-var_shares_cmps(cmps_sub_good, all_rxns, subjects, norm_kos, ko_net,
-  all_taxa, single_spec_cmps, contrib_threshold = 0.45, cov_shares = F,
-  met_data = NULL)
+var_shares_cmps(
+  cmps_sub_good,
+  all_rxns,
+  subjects,
+  norm_kos,
+  ko_net,
+  all_taxa,
+  single_spec_cmps,
+  contrib_threshold = 0.45,
+  cov_shares = F,
+  met_data = NULL
+)
 }
 \arguments{
 \item{cmps_sub_good}{CMP scores for metabolites with abundance data}

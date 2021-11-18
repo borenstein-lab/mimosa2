@@ -4,9 +4,17 @@
 \alias{get_all_singleSpec_cmps}
 \title{Get single-species CMP scores for every OTU and metabolite}
 \usage{
-get_all_singleSpec_cmps(all_otus, all_koAbunds_byOTU, valueVar, out_prefix,
-  rxn_table, degree_filter = 30, write_out = T, normalize = T,
-  ko_net = "")
+get_all_singleSpec_cmps(
+  all_otus,
+  all_koAbunds_byOTU,
+  valueVar,
+  out_prefix,
+  rxn_table,
+  degree_filter = 30,
+  write_out = T,
+  normalize = T,
+  ko_net = ""
+)
 }
 \arguments{
 \item{all_otus}{vector of OTUs or taxa}

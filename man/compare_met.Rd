@@ -4,8 +4,15 @@
 \alias{compare_met}
 \title{Compare a single set each of CMP scores and metabolite concentrations}
 \usage{
-compare_met(met_met, met_cmp, met_all, cmp_all, posneg = "pos",
-  cor_method = "spearman", nperm = 15000)
+compare_met(
+  met_met,
+  met_cmp,
+  met_all,
+  cmp_all,
+  posneg = "pos",
+  cor_method = "spearman",
+  nperm = 15000
+)
 }
 \arguments{
 \item{met_met}{metabolite to use from metabolite concentration data}

@@ -4,8 +4,13 @@
 \alias{run_shuffle}
 \title{Run one iteration of MIMOSA analysis with a randomized metabolic network. Run this function many times to generate a null distribution of metabolite comparisons.}
 \usage{
-run_shuffle(out_file, id_num = 1, n_iter = 5000, nonzero_filter = 3,
-  qval_thresholds = c(0.1, 0.01))
+run_shuffle(
+  out_file,
+  id_num = 1,
+  n_iter = 5000,
+  nonzero_filter = 3,
+  qval_thresholds = c(0.1, 0.01)
+)
 }
 \arguments{
 \item{out_file}{File path to .Rda file of MIMOSA output from run_all_metabolites}

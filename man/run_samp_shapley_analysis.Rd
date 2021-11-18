@@ -4,8 +4,14 @@
 \alias{run_samp_shapley_analysis}
 \title{Calculates contributions to variance using permutation/subset Shapley analysis for regression fits}
 \usage{
-run_samp_shapley_analysis(species_cmps, mets_melt, config_table,
-  nperm = 15000, signif_threshold = 0.01, return_perm = F)
+run_samp_shapley_analysis(
+  species_cmps,
+  mets_melt,
+  config_table,
+  nperm = 15000,
+  signif_threshold = 0.01,
+  return_perm = F
+)
 }
 \arguments{
 \item{species_cmps}{Table of species contributions (without residuals)}

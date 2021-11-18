@@ -9,10 +9,6 @@ randomize_net(netw, n_reps)
 randomize_net(netw, n_reps)
 }
 \arguments{
-\item{netw}{Network edge list, format of the 3rd output item of generate_genomic_network}
-
-\item{n_reps}{Number of successful edge switches to perform (default = 5000)}
-
 \item{netw}{edge list network}
 
 \item{n_reps}{number of times to successfully sample and switch}

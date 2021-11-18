@@ -4,8 +4,12 @@
 \alias{plot_metabolite_counts}
 \title{Make bar plot of MIMOSA outcome counts in different metabolite categories}
 \usage{
-plot_metabolite_counts(node_data, variable, threshold = "low",
-  prediction_colors = c("#1B9E77", "lightgrey", "#F46D43"))
+plot_metabolite_counts(
+  node_data,
+  variable,
+  threshold = "low",
+  prediction_colors = c("#1B9E77", "lightgrey", "#F46D43")
+)
 }
 \arguments{
 \item{node_data}{Processed core MIMOSA results table}

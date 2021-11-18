@@ -4,8 +4,11 @@
 \alias{calculate_var_shares_linear}
 \title{Calculates contributions to variance from a contribution table}
 \usage{
-calculate_var_shares_linear(species_contribution_table,
-  valueVar = "newValue", model_cov = F)
+calculate_var_shares_linear(
+  species_contribution_table,
+  valueVar = "newValue",
+  model_cov = F
+)
 }
 \arguments{
 \item{species_contribution_table}{Table of species contributions (with residuals)}

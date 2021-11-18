@@ -4,8 +4,13 @@
 \alias{cmp_met_plot}
 \title{Plot CMP values vs metabolite concentrations for a single metabolite}
 \usage{
-cmp_met_plot(cmp_table, met_table, mod_results = NULL,
-  sample_col = "Sample", met_title = NULL)
+cmp_met_plot(
+  cmp_table,
+  met_table,
+  mod_results = NULL,
+  sample_col = "Sample",
+  met_title = NULL
+)
 }
 \arguments{
 \item{cmp_table}{Dataset of CMP scores (long format, can be species-specific or added already) for a single metabolite}

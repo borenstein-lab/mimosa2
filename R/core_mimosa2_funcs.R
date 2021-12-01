@@ -1152,7 +1152,7 @@ read_mimosa2_files = function(file_list, configTable, app = T){
   #Save option to use for everything else
   humann2_metagenome = ifelse(configTable[V1=="file1_type", V2==get_text("database_choices")[5]], T, F)
   #Read metabolites
-  if(app) mets = fread(file_list[["file2"]]$datapath, header = T) else mets = fread(file_list[["file2"]], header = T)
+  if(app) mets = fread(file_list[["file2"]]$datapath, header = T, integer64 = "numeric") else mets = fread(file_list[["file2"]], header = T, integer64 = "numeric")
   met_nonzero_filt = ifelse(configTable[V1=="metNzeroFilter", is.numeric(V2)], configTable[V1=="metNzeroFilter", V2], 5)
   mets = met_table_fix(mets, met_nonzero_filt)
   if(humann2_metagenome == F) shared_samps = intersect(names(species), names(mets)) else {

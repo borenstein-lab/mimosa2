@@ -1912,8 +1912,11 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     # }
     
     if(config_table[V1=="metType", V2 ==get_text("met_type_choices")[2]]){ #Assume it is KEGG unless otherwise specified
-      cat("Mapping metabolite names to KEGG IDs\n")
-      mets = map_to_kegg_webchem(mets)
+      cat("Mapping metabolite IDs to KEGG IDs\n")
+      mets = map_hmdb_to_kegg_webchem(mets)
+    } else if(config_table[V1 == "metType", V2 == get_text("met_type_choices")[3]]){
+	cat("Mapping metabolite names to KEGG IDs\n")
+	mets = map_to_kegg_webchem(mets)
     }
     #Get CMP scores
     if("rxnEdit" %in% config_table[,V1]){
@@ -2013,6 +2016,10 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       time1 = Sys.time()
       var_shares = calculate_var_shares(indiv_cmps, met_table = mets_melt, model_results = cmp_mods, config_table = config_table, species_merge = bad_spec, signif_threshold = signifThreshold)
       cat(paste0("Contribution calculation time: ", Sys.time() - time1, "\n"))
+      if(is.null(var_shares)){ # If there were no signif metabolites
+        config_table[V1 == "compare_only", V2:="TRUE"]
+        compare_only = T
+      }
     } else {
       var_shares = NULL
       signifThreshold = 0.05 #This is just for the summary in this case

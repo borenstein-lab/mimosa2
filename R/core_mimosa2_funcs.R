@@ -428,7 +428,7 @@ calculate_var_shares = function(species_contribution_table, met_table, model_res
     setnames(species_contribution_table, c("V1", "NewSpecies"), c("CMP", "Species"))
   }
 
-  if(!"rankBased" %in% config_table[,V1]){
+  if(config_table[V1 == "rankBased", V2 == "FALSE"]){
     #Add residuals here
     species_contribution_table = add_residuals(species_contribution_table, model_dat = model_results[[1]], 
                                                resid_dat = model_results[[2]])
@@ -508,7 +508,7 @@ calculate_var_shares_linear = function(species_contribution_table, valueVar = "n
 #' run_shapley_contrib_analysis(species_cmps)
 #' @export
 run_shapley_contrib_analysis = function(species_cmps, mets_melt, config_table, nperm = 15000, signif_threshold = 0.01, return_perm = F){
-  if("rankBased" %in% config_table[,V1]){
+  if(config_table[V1 == "rankBased", V2 == "TRUE"]){
     rank_based = T
     if("rank_type" %in% config_table[,V1]){
       rank_type = config_table[V1=="rank_type", V2]
@@ -588,7 +588,7 @@ run_shapley_contrib_analysis = function(species_cmps, mets_melt, config_table, n
 #' run_samp_shapley_analysis(species_cmps)
 #' @export
 run_samp_shapley_analysis = function(species_cmps, mets_melt, config_table, nperm = 15000, signif_threshold = 0.01, return_perm = F){
-  if("rankBased" %in% config_table[,V1]){
+  if(config_table[V1 == "rankBased", V2 == "TRUE"]){
     rank_based = T
     if("rank_type" %in% config_table[,V1]){
       rank_type = config_table[V1=="rank_type", V2]
@@ -1831,7 +1831,7 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     missing_param = req_params[!req_params %in% config_table[,V1]]
     stop(paste0("Required parameters missing from configuration file: ", missing_param, "\n"))
   } 
-  all_params = c(req_params,  "metType", "netAdd", "simThreshold", "kegg_prefix", "vsearch_path", "compare_only") #Move to package sysdata?  "metagenome", "metagenome_format",
+  all_params = c(req_params,  "metType", "netAdd", "simThreshold", "kegg_prefix", "vsearch_path", "compare_only", "rankBased") #Move to package sysdata?  "metagenome", "metagenome_format",
   config_table[V2=="", V2:=FALSE]
   if(!"kegg_prefix" %in% config_table[,V1]){
     config_table = rbind(config_table, data.table(V1 = "kegg_prefix", V2 = paste0(config_table[V1=="data_prefix", V2], "/KEGG/")))
@@ -1846,6 +1846,12 @@ check_config_table = function(config_table, data_path = "data/", app = F){
     if(!"metType" %in% config_table[,V1]){
       config_table = rbind(config_table, data.table(V1 = "metType", V2 = get_text("met_type_choices")[1]))
     }
+    # if(!"rankBased" %in% config_table[,V1]){
+    #   config_table <- rbind(config_table, data.table(V1 = "rankBased", V2 = "FALSE"))
+    # }
+    # if(!"compare_only" %in% config_table[,V1]){
+    #   config_table <- rbind(config_table, data.table(V1 = "compare_only", V2 = "FALSE"))
+    # }
     config_table = rbind(config_table, data.table(V1 = all_params[!all_params %in% config_table[,V1]], V2 = FALSE))
   }
   #if non-species metagenome is provided, set compare_only flag
@@ -1923,7 +1929,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
       rxn_param = T
       cat("Will refine reaction network\n")
     } else rxn_param = F
-    if("rankBased" %in% config_table[,V1]){
+    if(config_table[V1 == "rankBased", V2 == "TRUE"]){
       rank_based = T
       cat("Will use rank-based/robust regression\n")
       if("rank_type" %in% config_table[,V1]){
@@ -2110,7 +2116,7 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
                   analysisSummary = analysis_summary, configs = config_table, CMPplots = CMP_plots, 
                   metContribPlots = met_contrib_plots, plotLegend = contrib_legend))
     } else {
-      return(list(varShares = var_shares, modelData = cmp_mods[[1]], networkData = network, newSpecies = species, 
+      return(list(varShares = var_shares, modelData = cmp_mods[[1]], networkData = network, newSpecies = species, newMets = mets, 
                   CMPScores = indiv_cmps, analysisSummary = analysis_summary, configs = config_table))
     }
     

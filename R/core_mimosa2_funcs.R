@@ -2112,11 +2112,12 @@ run_mimosa2 = function(config_table, species = "", mets = "", make_plots = F, sa
     }
     if(make_plots){
       return(list(varShares = var_shares, modelData = cmp_mods[[1]], 
-                  networkData = network, newSpecies = species, CMPScores = indiv_cmps, 
+                  networkData = network, newSpecies = species, newMets = mets, CMPScores = indiv_cmps, 
                   analysisSummary = analysis_summary, configs = config_table, CMPplots = CMP_plots, 
                   metContribPlots = met_contrib_plots, plotLegend = contrib_legend))
     } else {
-      return(list(varShares = var_shares, modelData = cmp_mods[[1]], networkData = network, newSpecies = species, newMets = mets, 
+      return(list(varShares = var_shares, modelData = cmp_mods[[1]], networkData = network, 
+                  newSpecies = species, newMets = mets, 
                   CMPScores = indiv_cmps, analysisSummary = analysis_summary, configs = config_table))
     }
     

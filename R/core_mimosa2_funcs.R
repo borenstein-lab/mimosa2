@@ -2141,7 +2141,10 @@ transform_mets = function(met_dat, met_transform){
     if(any(met_dat[,value < 0])){
       met_dat[,scaledValue:=value - min(value, na.rm = T), by=compound]
     } else met_dat[,scaledValue:=value]
-    met_dat[,scaledValue:=log1p(scaledValue)]
+    #met_dat[,scaledValue:=log1p(scaledValue)]
+    #Impute zero values as 70% of min abundance
+    met_dat[,scaledValue:=ifelse(value == 0, min(value[value != 0], na.rm = T)*0.7, value), by = compound] 
+    met_dat[,scaledValue:=log(value)]
   } else if(met_transform == "sqrt"){
     if(any(met_dat[,value < 0])){
       met_dat[,scaledValue:=value - min(value, na.rm = T), by=compound]

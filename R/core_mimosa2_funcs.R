@@ -2139,8 +2139,8 @@ transform_mets = function(met_dat, met_transform){
     met_dat[,scaledValue:=scale(value), by=compound]
   } else if(met_transform == "logplus"){
     if(any(met_dat[,value < 0])){
-      met_dat[,scaledValue:=value - min(value, na.rm = T), by=compound]
-    } else met_dat[,scaledValue:=value]
+      met_dat[,scaledValue:=as.numeric(value - min(value, na.rm = T)), by=compound]
+    } else met_dat[,scaledValue:=as.numeric(value)]
     #met_dat[,scaledValue:=log1p(scaledValue)]
     #Impute zero values as 70% of min abundance
     met_dat[,scaledValue:=ifelse(scaledValue == 0, min(scaledValue[scaledValue > 0], na.rm = T)*0.7, scaledValue), by = compound] 

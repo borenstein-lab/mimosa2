@@ -54,6 +54,13 @@ met_table_fix = function(met_table, nzero_filt = 5){
       warning(paste0(dup_mets[k], " is specified in ", length(dup_rows), " rows of the metabolite table. Duplicate features are not allowed; all rows with this feature after the first one will be removed"))
     }
   }
+  ## Check for large integers in mets
+  met_col_classes <- unlist(mets[,lapply(.SD, class)])
+  if(any(met_col_classes) == "integer64"){ 
+    warning("Metabolite table has large integers in table, entire dataset will be coerced to integer64")
+    mets = data.table(compound = mets[,compound], mets[,lapply(.SD, bit64::as.integer64), 
+                                                       .SDcols = names(mets)[2:ncol(mets)]])
+  }
   
   return(met_table)
 }

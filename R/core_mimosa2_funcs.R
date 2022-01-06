@@ -1653,6 +1653,10 @@ get_cmp_scores_kos = function(ko_table, network, normalize = T, relAbund = T, re
   network_reacs[,stoichReac:=-1*stoichReac]
   setnames(network_reacs, c("Reac", "stoichReac"), c("compound", "stoich"))
   setnames(network_prods, c("Prod", "stoichProd"), c("compound", "stoich"))
+  setkey(network_reacs, NULL)
+  setkey(network_prods, NULL)
+  network_reacs = unique(network_reacs)
+  network_prods = unique(network_prods)
   if(normalize){
     network_reacs[,stoich:=as.double(stoich)]
     network_prods[,stoich:=as.double(stoich)]

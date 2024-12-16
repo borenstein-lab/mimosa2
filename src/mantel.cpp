@@ -23,16 +23,32 @@ using namespace Rcpp;
 inline int randWrapper(const int n) { return floor(unif_rand()*n); }
 
 // [[Rcpp::export]]
-Rcpp::NumericVector randomShuffle(Rcpp::NumericVector a) {
+// Rcpp::NumericVector randomShuffle(Rcpp::NumericVector a) {
 
   // clone a into b to leave a alone
-  Rcpp::NumericVector b = Rcpp::clone(a);
+//  Rcpp::NumericVector b = Rcpp::clone(a);
 
-  std::random_shuffle(b.begin(), b.end(), randWrapper);
+//  std::random_shuffle(b.begin(), b.end(), randWrapper);
 
-  return b;
+//  return b;
+// }
+
+// modification suggested from Rcpp gallery, 2024-12 to work with C++17
+
+// [[Rcpp::export]]
+Rcpp::NumericVector randomShuffle(Rcpp::NumericVector a) {
+    // clone a into b to leave a alone
+    Rcpp::NumericVector b = Rcpp::clone(a);
+    int n = b.size();
+    int j;
+
+    // Fisher-Yates Shuffle Algorithm
+    for (int i = 0; i < n - 1; i++) {
+      j = i + randWrapper(n - i);
+      std::swap(b[i], b[j]);
+    }
+    return b;
 }
-
 //' Make matrix of permutations for mantel test with a row for each permutation and a column for each sample
 //'
 //' @param nSamples number of samples
